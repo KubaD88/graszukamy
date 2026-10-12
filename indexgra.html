@@ -1,0 +1,1464 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Szukamy Dzieciątka – gra 8-bit</title>
+<meta name="theme-color" content="#0a0a14">
+<style>
+    :root { --gold:#f5c542; --paper:#f5e8c0; --muted:#b8a880; --edge:#6a5a3a; --panel:#12122a; --panel2:#1c1c3a; --brand:#e63946; }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; background: radial-gradient(ellipse at 50% 0%, #1c1c3c 0%, #0a0a14 70%); color:var(--paper);
+           font-family:'Courier New', Courier, monospace; padding:16px; display:flex; justify-content:center; }
+    .game-wrap { width:100%; max-width:760px; }
+    h1 { margin:4px 0 12px; text-align:center; font-size:clamp(1.15rem,3.6vw,1.6rem); color:var(--gold); letter-spacing:.04em; text-shadow:2px 2px 0 #000; }
+    .frame { background:#0c0c1c; border:4px solid var(--edge); border-radius:14px; padding:8px; box-shadow:0 0 0 3px #000, 0 12px 40px rgba(0,0,0,.6); }
+    canvas { display:block; width:100%; aspect-ratio:8/5; border-radius:6px; background:#000;
+             image-rendering:crisp-edges; image-rendering:pixelated; }
+    .dialog { margin-top:12px; background:var(--panel); border:3px solid var(--edge); border-radius:10px; padding:12px 16px; text-align:center; }
+    .dialog .title { font-weight:700; font-size:clamp(1.05rem,3.2vw,1.3rem); color:var(--paper); margin-bottom:4px; }
+    .dialog .hint { color:var(--muted); font-size:clamp(.9rem,2.6vw,1rem); min-height:3.2em; line-height:1.5; }
+    .options { display:grid; gap:8px; margin-top:12px; }
+    .opt { font:inherit; font-weight:700; font-size:1rem; text-align:left; color:var(--paper); background:var(--panel2); border:3px solid var(--edge);
+           border-radius:10px; padding:12px 16px; min-height:50px; cursor:pointer; transition:transform .08s, border-color .08s, background .08s; }
+    .opt:hover:not(:disabled), .opt:focus-visible { border-color:var(--gold); background:#2a2a50; color:#fff; outline:none; transform:translateX(3px); }
+    .opt:disabled { opacity:.55; cursor:default; }
+    .endbox { margin-top:12px; text-align:center; background:var(--panel); border:3px solid var(--edge); border-radius:10px; padding:18px 14px; }
+    .end-title { font-size:clamp(1.4rem,5vw,2rem); font-weight:700; margin-bottom:6px; }
+    .end-title.win { color:var(--gold); text-shadow:2px 2px 0 #000; }
+    .end-title.lose { color:#ff7a7a; text-shadow:2px 2px 0 #000; }
+    .end-info { color:var(--muted); margin-bottom:14px; }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+    .btn { font:inherit; font-weight:700; color:#fff; background:var(--brand); border:3px solid #000; border-radius:10px; padding:11px 20px; cursor:pointer; text-decoration:none; display:inline-block; }
+    .btn:hover { filter:brightness(1.12); }
+    .btn.alt { background:var(--panel2); border-color:var(--edge); color:var(--paper); }
+    .btn:focus-visible { outline:3px solid var(--gold); outline-offset:2px; }
+    .bar { margin-top:12px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+    .bar .btn { padding:9px 16px; font-size:.9rem; }
+    .stat { color:var(--gold); font-weight:700; }
+    .legend { margin-top:12px; text-align:center; color:#6e6a58; font-size:.82rem; }
+    .back { display:block; text-align:center; margin:14px 0 4px; color:var(--muted); }
+    .frame { position:relative; }
+    .hud { display:flex; justify-content:space-between; align-items:center; padding:2px 4px 8px; }
+    .heart { display:inline-block; font-size:1.35rem; margin-right:3px; transition:transform .2s; }
+    .heart.lost { opacity:.55; }
+    .heart.hit { animation:hit .5s; }
+    @keyframes hit { 0%{transform:scale(1.9);} 100%{transform:scale(1);} }
+    .slots { display:flex; gap:6px; }
+    .slot { display:grid; place-items:center; width:38px; height:34px; border:2px dashed #4a4a6a; border-radius:8px; color:#6a6a8a; font-size:1.2rem; }
+    .slot.have { border:2px solid var(--gold); background:#2a2438; color:#fff; box-shadow:0 0 10px rgba(245,197,66,.35); }
+    .toast { position:absolute; left:50%; top:60px; transform:translate(-50%,-10px); background:rgba(10,10,20,.92); color:var(--gold); border:2px solid var(--gold);
+             padding:8px 16px; border-radius:10px; font-weight:700; opacity:0; pointer-events:none; transition:opacity .25s, transform .25s; white-space:nowrap; max-width:94%; overflow:hidden; text-overflow:ellipsis; }
+    .toast.show { opacity:1; transform:translate(-50%,0); }
+    .frame.shake { animation:shake .38s; }
+    @keyframes shake { 0%,100%{transform:translateX(0);} 20%{transform:translateX(-7px);} 40%{transform:translateX(7px);} 60%{transform:translateX(-5px);} 80%{transform:translateX(4px);} }
+    .opt.locked { opacity:.5; border-style:dashed; font-weight:400; }
+    .opt.wrongpick { opacity:.45; border-color:#a03a3a; text-decoration:line-through; }
+    .end-stars { font-size:2rem; letter-spacing:.2em; margin-bottom:6px; }
+    .end-badges { color:var(--gold); font-weight:700; margin:-6px 0 14px; }
+    .badges { margin-top:10px; display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; }
+    .badge { background:var(--panel); border:2px solid #2a2a44; border-radius:10px; padding:10px; text-align:center; opacity:.65; font-size:.88rem; }
+    .badge.got { opacity:1; border-color:var(--gold); }
+    .badge .bi { display:block; font-size:1.6rem; }
+    .badge small { display:block; color:var(--muted); margin-top:3px; }
+    .chap { font-size:.72rem; letter-spacing:.14em; color:#8a7aa8; margin-bottom:4px; }
+    .say { margin-top:12px; background:#f5e8c0; color:#2a1c10; border-radius:12px; padding:10px 14px; text-align:left; position:relative; font-weight:700; line-height:1.45; box-shadow:0 3px 0 #8a7a50; }
+    .say::before { content:''; position:absolute; top:-9px; left:28px; border:9px solid transparent; border-bottom-color:#f5e8c0; border-top:0; }
+    .say .who { display:block; font-size:.78rem; color:#8a5a2a; letter-spacing:.05em; margin-bottom:2px; }
+    .say.pop { animation:pop .3s; }
+    @keyframes pop { 0%{transform:scale(.92);opacity:0;} 100%{transform:scale(1);opacity:1;} }
+    .btn.cont { background:#2a7a4a; }
+    [hidden] { display:none !important; }
+    @media (max-width:520px){ body{padding:10px;} .bar{justify-content:center;} }
+</style>
+</head>
+<body>
+<div class="game-wrap">
+    <h1>⭐ SZUKAMY DZIECIĄTKA ⭐</h1>
+    <div class="frame" id="frame">
+        <div class="hud"><div class="hearts" id="hearts"></div><div class="slots" id="slots"></div></div>
+        <canvas id="scene" width="320" height="200" role="img" aria-label="Ilustracja bieżącej sceny gry"></canvas>
+        <div class="toast" id="toast" role="status"></div>
+    </div>
+
+    <div class="dialog" aria-live="polite">
+        <div class="chap" id="chap"></div>
+        <div class="title" id="title"></div>
+        <div class="hint" id="hint"></div>
+        <div class="say" id="say" hidden><span class="who" id="sayWho"></span><span class="txt" id="sayText"></span></div>
+    </div>
+    <div class="options" id="options"></div>
+    <div class="endbox" id="endbox" hidden>
+        <div class="end-title" id="endTitle"></div>
+        <div class="end-stars" id="endStars"></div>
+        <div class="end-info" id="endInfo"></div>
+        <div class="end-badges" id="endBadges"></div>
+        <div class="actions">
+            <button class="btn cont" id="cont" type="button" hidden></button>
+            <button class="btn" id="again" type="button">🔄 Zagraj jeszcze raz</button>
+            <a class="btn alt" href="index.html#games">🎮 Wróć do gier</a>
+        </div>
+    </div>
+
+    <div class="bar">
+        <button class="btn alt" id="restart" type="button">🔄 NOWA GRA</button>
+        <span class="stat">👣 Kroki: <span id="steps">0</span></span>
+        <button class="btn alt" id="badgesBtn" type="button" aria-expanded="false">🏅 Odznaki</button>
+        <button class="btn alt" id="sound" type="button" aria-pressed="false">🔇 Dźwięk</button>
+    </div>
+    <div class="badges" id="badges" hidden></div>
+    <div class="legend">❤️ Masz 3 serca – błędna odpowiedź lub zły wybór kosztuje serce.<br>🕯️ 🍞 🎁 📜 Zbieraj przedmioty, bo pomogą w drodze i dadzą więcej gwiazdek.<br>↑ ↓ wybór · ENTER zatwierdź · klawisze 1–9 · albo dotknij odpowiedzi</div>
+    <a class="back" href="index.html#games">← Wróć do gier</a>
+</div>
+
+<script>
+(function () {
+'use strict';
+const canvas = document.getElementById('scene');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+const W = 320, H = 200;
+const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ======================= FABUŁA (bez zmian) ======================= */
+const MAXH = 3;
+const ITEMS = {
+    swieca: { icon: '🕯️', name: 'Świeca' },
+    chleb:  { icon: '🍞', name: 'Chleb' },
+    dar:    { icon: '🎁', name: 'Dar Mędrców' },
+    zwoj:   { icon: '📜', name: 'Zwój proroctwa' }
+};
+const BADGES = {
+    end_stajnia:  ['🐴', 'Przy żłóbku',            'Dotrzyj do stajenki sam'],
+    end_pasterze: ['🐑', 'Z pasterzami',           'Dotrzyj do żłóbka razem z pasterzami'],
+    end_medrcy:   ['👑', 'Z Mędrcami',             'Dotrzyj do żłóbka razem z Mędrcami'],
+    swiatynia:    ['🕍', 'Czterdziesty dzień',     'Spotkaj Symeona i Annę w świątyni'],
+    nazaret:      ['🏠', 'Dom w Nazarecie',        'Doprowadź Świętą Rodzinę do Nazaretu'],
+    znawca:       ['📜', 'Znawca proroków',        'Odkryj, gdzie ma się narodzić Mesjasz'],
+    bez_strat:    ['❤️', 'Bez straty serca',       'Wygraj, nie tracąc ani jednego serca'],
+    pelna_sakwa:  ['🎒', 'Pełna sakwa',            'Wygraj, mając wszystkie 4 przedmioty'],
+    egipt:        ['🐫', 'Droga przez Egipt',      'Wygraj po ucieczce do Egiptu'],
+    prawda:       ['📢', 'Prawda ponad wszystko',  'Wygraj po powiedzeniu prawdy Herodowi']
+};
+const game = {
+    /* ================= ROZDZIAŁ I · BETLEJEM ================= */
+    start: {
+        text: 'BETLEJEM NOCĄ',
+        hint: 'Aniołowie śpiewają. Gdzie szukać Dzieciątka?',
+        options: [
+            { text: '🏚️ GOSPODA', next: 'gospoda' },
+            { text: '🐑 PASTERZE', next: 'pasterze' },
+            { text: '🌟 GWIAZDA', next: 'gwiazda' },
+            { text: '👑 DWÓR HERODA', next: 'herod' },
+            { text: '📜 RYNEK – SPIS LUDNOŚCI', next: 'rynek' }
+        ]
+    },
+    rynek: {
+        text: 'SPIS LUDNOŚCI',
+        hint: 'Cezar August kazał przeprowadzić spis. Każdy wraca do miasta swoich przodków, więc Betlejem pęka w szwach.',
+        say: { who: '📜 Rzymski urzędnik', text: 'Spis ludności! Każdy ma się zapisać w mieście swego rodu!' },
+        options: [
+            { text: '🗣️ ZAGADNIJ URZĘDNIKA', next: 'rynek_urzednik' },
+            { text: '🏚️ IDŹ DO GOSPODY', next: 'gospoda' },
+            { text: '🔙 WRÓĆ NA ULICE', next: 'start' }
+        ]
+    },
+    rynek_urzednik: {
+        text: 'URZĘDNIK SPISOWY',
+        hint: 'Zapisuje: Józef z rodu Dawida, przybyły z Nazaretu, a z nim Maryja, która oczekuje Dziecka.',
+        say: { who: '📜 Rzymski urzędnik', text: 'Ci z Nazaretu? Szukają noclegu, ale w mieście nie ma wolnych miejsc.' },
+        options: [
+            { text: '🏚️ IDŹ DO GOSPODY', next: 'gospoda' },
+            { text: '🔙 WRÓĆ NA RYNEK', next: 'rynek' }
+        ]
+    },
+    gospoda: {
+        text: 'GOSPODA PEŁNA',
+        hint: 'Gospodarz mówi o stajni za miastem',
+        say: { who: '🏚️ Gospodarz', text: 'W gospodzie nie ma już miejsca. Za miastem stoi stajnia – tam szukaj.' },
+        options: [
+            { text: '🐴 IDŹ DO STAJNI', next: 'gate_stajnia' },
+            { text: '🕯️ PROŚ O ŚWIECĘ NA DROGĘ', next: 'gospoda_swieca', hideIf: 'swieca' },
+            { text: '👑 ZAPYTAJ O HERODA', next: 'herod_gospoda' },
+            { text: '🔙 WRÓĆ NA ZEWNĄTRZ', next: 'start' }
+        ]
+    },
+    gospoda_swieca: {
+        text: 'DOBRY GOSPODARZ',
+        hint: 'Dostajesz świecę na drogę. „Dobro wraca do tego, kto je czyni.”',
+        gives: 'swieca',
+        options: [ { text: '🔙 WRÓĆ DO GOSPODY', next: 'gospoda' } ]
+    },
+    herod_gospoda: {
+        text: 'HEROD SZUKA JEZUSA',
+        hint: 'Gospodarz ostrzega: „Herod chce zgładzić Dzieciątko!”',
+        options: [
+            { text: '🏃 BIEŻ DO STAJNI', next: 'gate_stajnia' },
+            { text: '🧙 OSTRZEŻ MĘDRCÓW', next: 'medrcy_ostrzezenie' }
+        ]
+    },
+    pasterze: {
+        text: 'PASTERZE BIEGNĄ',
+        hint: 'Anioł im objawił. Idziesz z nimi?',
+        options: [
+            { text: '✅ TAK – IDĘ Z PASTERZAMI', next: 'gate_pasterze' },
+            { text: '🎶 POSŁUCHAJ CHÓRU ANIOŁÓW', next: 'pasterze_aniolowie' },
+            { text: '🍞 PROŚ O CHLEB NA DROGĘ', next: 'pasterze_chleb', hideIf: 'chleb' },
+            { text: '❓ PYTAM O ZNAK', next: 'znak_pasterze' },
+            { text: '❌ NIE – WRACAM DO MIASTA', next: 'miasto_sam' }
+        ]
+    },
+    pasterze_aniolowie: {
+        text: 'CHÓR ANIOŁÓW',
+        hint: 'Nagle niebo wypełnia mnóstwo aniołów, którzy wielbią Boga. Pasterze drżą ze zdumienia.',
+        say: { who: '👼 Zastęp aniołów', text: 'Chwała Bogu na wysokościach, a na ziemi pokój ludziom!' },
+        options: [ { text: '🔙 WRÓĆ DO PASTERZY', next: 'pasterze' } ]
+    },
+    pasterze_chleb: {
+        text: 'PASTERZE SIĘ DZIELĄ',
+        hint: 'Dostajesz chleb na drogę. „Kto dzieli się z innymi, nigdy nie głoduje.”',
+        gives: 'chleb',
+        options: [ { text: '🔙 WRÓĆ DO PASTERZY', next: 'pasterze' } ]
+    },
+    znak_pasterze: {
+        text: 'ZNAK DANY',
+        hint: '„Znajdziesz Dzieciątko owinięte w pieluszki, leżące w żłobie”',
+        options: [
+            { text: '🐑 IDŹ Z PASTERZAMI', next: 'gate_pasterze' },
+            { text: '🚶 SZUKAJ SAM', next: 'miasto_sam' }
+        ]
+    },
+    miasto_sam: {
+        text: 'ZGUBIŁEŚ SIĘ W MROKU',
+        hint: 'Bez przewodników nie trafiłeś. Tracisz serce. Światło pomogłoby ci odnaleźć drogę.',
+        penalty: 1,
+        options: [
+            { text: '🕯️ ZAPAL ŚWIECĘ I SZUKAJ GWIAZDY', next: 'gwiazda', requires: 'swieca' },
+            { text: '🔙 WRÓĆ NA RYNEK', next: 'start' }
+        ]
+    },
+    gwiazda: {
+        text: 'GWIAZDA PROWADZI NA WSCHÓD',
+        hint: 'Spotykasz Mędrców. Co robisz?',
+        say: { who: '🧙 Mędrcy', text: 'Ujrzeliśmy Jego gwiazdę na wschodzie i przybyliśmy oddać Mu pokłon.' },
+        options: [
+            { text: '🧙 DOŁĄCZ DO MĘDRCÓW', next: 'medrcy' },
+            { text: '🚶 IDŹ ZA GWIAZDĄ SAM', next: 'gwiazda_sam' },
+            { text: '🔙 WRÓĆ DO MIASTA', next: 'start' }
+        ]
+    },
+    gwiazda_sam: {
+        text: 'SAMOTNA WĘDRÓWKA',
+        hint: 'Gwiazda prowadzi cię do stajni – ale bez darów. Musisz sam dotrzymać jej kroku.',
+        options: [
+            { text: '⭐ IDŹ ZA GWIAZDĄ', next: 'gwiazda_trasa' },
+            { text: '🧙 WRÓĆ PO MĘDRCÓW', next: 'medrcy' }
+        ]
+    },
+    gwiazda_trasa: {
+        text: 'GWIAZDA PROWADZI',
+        hint: 'Przesuwaj palec po planszy (albo strzałki ← →) i idź pod gwiazdą. Trzymaj się jej światła!',
+        mini: { win: 'gate_stajnia', fail: 'gwiazda_zgubiona' },
+        options: []
+    },
+    gwiazda_zgubiona: {
+        text: 'ZGUBIŁEŚ GWIAZDĘ',
+        hint: 'Chmury zasłoniły drogę. Tracisz serce, ale możesz spróbować jeszcze raz.',
+        penalty: 1,
+        options: [
+            { text: '🔁 SPRÓBUJ JESZCZE RAZ', next: 'gwiazda_trasa' },
+            { text: '🔙 WRÓĆ DO MIASTA', next: 'start' }
+        ]
+    },
+    medrcy: {
+        text: 'MĘDRCY ZE WSCHODU',
+        hint: 'Niosą dary: złoto, kadzidło, mirrę. Idą do Jezusa.',
+        options: [
+            { text: '🧙 IDŹ Z MĘDRCAMI', next: 'gate_medrcy' },
+            { text: '⚠️ OSTRZEŻ ICH PRZED HERODEM', next: 'medrcy_ostrzezenie' },
+            { text: '🎁 WEŹ DAR I IDŹ SAM', next: 'medrcy_dar_sam' }
+        ]
+    },
+    medrcy_ostrzezenie: {
+        text: 'OSTRZEGASZ MĘDRCÓW',
+        hint: 'Mędrcy dziękują, zmieniają drogę i dają ci dar dla Dzieciątka.',
+        gives: 'dar',
+        options: [
+            { text: '🧙 IDŹCIE DO STAJNI', next: 'gate_medrcy' },
+            { text: '🐫 UCIEKAJCIE DO EGIPTU', next: 'ucieczka_egipt' }
+        ]
+    },
+    medrcy_dar_sam: {
+        text: 'ZABRAŁEŚ DAR I POSZEDŁEŚ SAM',
+        hint: 'Mędrcy się obrażają, a ty gubisz drogę. Tracisz serce. Możesz ich przeprosić.',
+        penalty: 1,
+        options: [ { text: '🙏 PRZEPROŚ MĘDRCÓW', next: 'medrcy' } ]
+    },
+    herod: {
+        text: 'DWÓR HERODA',
+        hint: 'Herod pyta: „Gdzie jest nowo narodzony Król?”',
+        say: { who: '👑 Herod', text: 'Idź i dokładnie wypytaj o Dziecię. Gdy je znajdziesz, powiedz mi – ja też chcę oddać Mu pokłon.' },
+        options: [
+            { text: '📢 POWIEDZ PRAWDĘ', next: 'herod_prawda' },
+            { text: '🤥 SKŁAM', next: 'herod_klamstwo' },
+            { text: '👂 PODSŁUCHAJ UCZONYCH W PIŚMIE', next: 'herod_uczeni', hideIf: 'zwoj' },
+            { text: '🏃 UCIEKAJ', next: 'start' }
+        ]
+    },
+    herod_uczeni: {
+        text: 'UCZENI W PIŚMIE',
+        hint: 'Herod zwołał arcykapłanów i uczonych w Piśmie. Pyta ich, gdzie ma się narodzić Mesjasz. Co odpowiedzą?',
+        shuffle: true,
+        options: [
+            { text: '🏘️ W BETLEJEM JUDZKIM', next: 'herod_zwoj' },
+            { text: '🏠 W NAZARECIE', wrong: true },
+            { text: '🏛️ W JEROZOLIMIE', wrong: true }
+        ]
+    },
+    herod_zwoj: {
+        text: 'PROROCTWO ODNALEZIONE',
+        hint: 'Prorok zapowiedział: z Betlejem wyjdzie Władca, który będzie pasterzem Izraela. Zapisujesz to na zwoju.',
+        say: { who: '📜 Uczony w Piśmie', text: 'Tak napisał prorok: w Betlejem Judzkim narodzi się Wódz Izraela.' },
+        gives: 'zwoj',
+        options: [ { text: '🔙 WRÓĆ DO HERODA', next: 'herod' } ]
+    },
+    herod_prawda: {
+        text: 'HEROD WPADA W SZAŁ',
+        hint: 'Każe cię pojmać. Uciekaj do Egiptu!',
+        flag: 'prawda',
+        options: [
+            { text: '🐫 UCIEKAJ DO EGIPTU', next: 'ucieczka_egipt' },
+            { text: '🙏 PROŚ O ŁASKĘ', next: 'herod_laska' }
+        ]
+    },
+    herod_laska: {
+        text: 'HEROD CIĘ NIE SŁUCHA',
+        hint: 'Zostajesz wrzucony do lochu. Tracisz serce. Zostaje ci tylko modlitwa.',
+        penalty: 1,
+        options: [ { text: '🙏 MÓDL SIĘ W LOCHU', next: 'lochy_sen' } ]
+    },
+    lochy_sen: {
+        text: 'ANIOŁ W LOCHU',
+        hint: 'Anioł otwiera kraty i mówi: „Uciekaj do Egiptu!”',
+        options: [ { text: '🐫 UCIEKAJ DO EGIPTU', next: 'ucieczka_egipt' } ]
+    },
+    herod_klamstwo: {
+        text: 'HEROD WYCZUWA KŁAMSTWO',
+        hint: 'Każe cię pojmać. Tracisz serce. Wróć i powiedz prawdę.',
+        penalty: 1,
+        options: [ { text: '🔙 STAŃ PRZED HERODEM', next: 'herod' } ]
+    },
+
+    /* ================= ROZDZIAŁ II · ŚWIĄTYNIA ================= */
+    swiatynia: {
+        text: 'ŚWIĄTYNIA W JEROZOLIMIE',
+        hint: 'Czterdzieści dni po narodzeniu Maryja i Józef przynoszą Dziecię do świątyni, by ofiarować Je Panu. W tłumie pielgrzymów szukasz tych, którzy Je rozpoznają.',
+        options: [
+            { text: '🕊️ IDŹ DO OŁTARZA OFIAR', next: 'swiatynia_ofiara' },
+            { text: '👴 ZAGADNIJ STAREGO CZŁOWIEKA', next: 'swiatynia_symeon' },
+            { text: '👵 POSZUKAJ PROROCZYNI', next: 'swiatynia_anna' },
+            { text: '🚪 DO DZIEDZIŃCA ŚWIĄTYNI', next: 'gate_swiatynia', requiresFlags: ['symeon', 'anna'], lockText: ' — najpierw spotkaj Symeona i Annę' }
+        ]
+    },
+    swiatynia_ofiara: {
+        text: 'OFIARA UBOGICH',
+        hint: 'Maryja i Józef składają ofiarę ubogich: parę synogarlic albo dwa młode gołębie, tak jak nakazuje Prawo Pańskie.',
+        options: [ { text: '🔙 WRÓĆ DO ŚWIĄTYNI', next: 'swiatynia' } ]
+    },
+    swiatynia_symeon: {
+        text: 'SYMEON',
+        hint: 'Symeon, człowiek sprawiedliwy i pobożny, czekał na pocieszenie Izraela. Duch Święty obiecał mu, że nie umrze, zanim ujrzy Mesjasza. Bierze Dziecię na ręce.',
+        say: { who: '👴 Symeon', text: 'Moje oczy ujrzały Twoje zbawienie – światło dla wszystkich narodów!' },
+        flag: 'symeon',
+        options: [ { text: '🔙 WRÓĆ DO ŚWIĄTYNI', next: 'swiatynia' } ]
+    },
+    swiatynia_anna: {
+        text: 'PROROCZYNI ANNA',
+        hint: 'Anna, córka Fanuela z pokolenia Asera, miała osiemdziesiąt cztery lata. Nie opuszczała świątyni, służąc Bogu postem i modlitwą. Wielbi Boga i mówi o Dziecięciu wszystkim, którzy czekają na wybawienie.',
+        say: { who: '👵 Anna', text: 'Dziękujmy Bogu! Oto Ten, na którego czekaliśmy!' },
+        flag: 'anna',
+        options: [ { text: '🔙 WRÓĆ DO ŚWIĄTYNI', next: 'swiatynia' } ]
+    },
+    gate_swiatynia: {
+        text: 'U WEJŚCIA DO DZIEDZIŃCA',
+        hint: 'Lewita pyta: „Jaką ofiarę złożyli rodzice Jezusa w świątyni?”',
+        shuffle: true,
+        options: [
+            { text: '🕊️ PARĘ SYNOGARLIC LUB DWA MŁODE GOŁĘBIE', next: 'swiatynia_koniec' },
+            { text: '🐑 BARANKA I WOŁY', wrong: true },
+            { text: '💰 SZEKLE ZŁOTA', wrong: true }
+        ]
+    },
+
+    /* ================= ROZDZIAŁ III · EGIPT I NAZARET ================= */
+    sen_medrcow: {
+        text: 'SEN MĘDRCÓW',
+        hint: 'Po pokłonie Dzieciątku Mędrcy zasypiają. Bóg ostrzega ich we śnie, by nie wracali do Heroda.',
+        say: { who: '👼 Anioł we śnie', text: 'Nie wracajcie do Heroda! Wróćcie do siebie inną drogą.' },
+        options: [ { text: '🌅 WYRUSZ INNĄ DROGĄ', next: 'sen_jozefa' } ]
+    },
+    sen_jozefa: {
+        text: 'SEN JÓZEFA',
+        hint: 'Anioł Pański ukazuje się Józefowi we śnie. Herod chce zgładzić Dziecię, więc rodzina musi uciekać do Egiptu.',
+        say: { who: '👼 Anioł Pański', text: 'Wstań, weź Dziecię i Jego Matkę i uciekaj do Egiptu!' },
+        options: [ { text: '🐫 WYRUSZ DO EGIPTU', next: 'ucieczka_egipt' } ]
+    },
+    ucieczka_egipt: {
+        text: 'UCIECZKA DO EGIPTU',
+        hint: 'Święta Rodzina znalazła schronienie w Egipcie. Czekacie na wieści z ojczyzny. Zapasy chleba bardzo się przydadzą.',
+        flag: 'egipt',
+        options: [
+            { text: '⏳ CZEKAJ NA ZNAK Z NIEBA', nextIf: { item: 'chleb', yes: 'smierc_heroda', no: 'pustynia_glod' } },
+            { text: '🏝️ ZOSTAŃ W EGIPCIE NA ZAWSZE', next: 'egipt_koniec' }
+        ]
+    },
+    pustynia_glod: {
+        text: 'TRUDNY CZAS NA OBCZYŹNIE',
+        hint: 'Bez zapasów czekanie w obcym kraju jest ciężkie. Tracisz siły i serce, ale w końcu przychodzi znak.',
+        penalty: 1,
+        options: [ { text: '🚶 CZEKAJ DALEJ', next: 'smierc_heroda' } ]
+    },
+    egipt_koniec: {
+        text: 'ZOSTAJESZ W EGIPCIE',
+        hint: 'Bezpieczny, ale zapominasz o drodze do domu. Tracisz serce. Wracaj na drogę!',
+        penalty: 1,
+        options: [ { text: '🔙 WRÓĆ NA DROGĘ', next: 'ucieczka_egipt' } ]
+    },
+    smierc_heroda: {
+        text: 'HEROD UMARŁ',
+        hint: 'Zagrożenie minęło. Anioł znów ukazuje się Józefowi we śnie i każe wracać do ziemi Izraela.',
+        say: { who: '👼 Anioł Pański', text: 'Wstań, weź Dziecię i Jego Matkę i wracaj do ziemi Izraela. Ci, którzy czyhali na życie Dziecięcia, nie żyją.' },
+        options: [ { text: '🏠 WRACAJ DO IZRAELA', next: 'droga_nazaret' } ]
+    },
+    droga_nazaret: {
+        text: 'POWRÓT DO IZRAELA',
+        hint: 'Józef boi się Archelaosa, który rządzi w Judei po Herodzie. Ostrzeżony we śnie, kieruje się do Galilei.',
+        options: [ { text: '🚶 IDŹ DO GALILEI', next: 'gate_nazaret' } ]
+    },
+    gate_nazaret: {
+        text: 'NA DRODZE DO GALILEI',
+        hint: 'Wędrowiec pyta: „Dlaczego Józef zamieszkał w Nazarecie?”',
+        shuffle: true,
+        options: [
+            { text: '🌙 BAŁ SIĘ ARCHELAOSA I BYŁ OSTRZEŻONY WE ŚNIE', next: 'nazaret' },
+            { text: '🌟 BO TAM URODZIŁ SIĘ JEZUS', wrong: true },
+            { text: '👑 BO TAK ROZKAZAŁ HEROD', wrong: true }
+        ]
+    },
+
+    /* ================= PYTANIA PRZY STAJENCE ================= */
+    gate_stajnia: {
+        text: 'DRZWI STAJNI',
+        hint: 'Anioł strażnik pyta: „Dlaczego Dzieciątko leży w żłobie?”',
+        shuffle: true,
+        options: [
+            { text: '🏨 W GOSPODZIE NIE BYŁO DLA NICH MIEJSCA', next: 'stajnia' },
+            { text: '👑 TAK ROZKAZAŁ KRÓL HEROD', wrong: true },
+            { text: '🛏️ NIE LUBIŁO ŁÓŻECZKA', wrong: true }
+        ]
+    },
+    gate_pasterze: {
+        text: 'DRZWI STAJNI',
+        hint: 'Anioł strażnik pyta: „Komu anioł jako pierwszym ogłosił narodzenie Jezusa?”',
+        shuffle: true,
+        options: [
+            { text: '🐑 PASTERZOM', next: 'stajnia_z_pasterzami' },
+            { text: '👑 KRÓLOWI HERODOWI', wrong: true },
+            { text: '🏨 GOSPODARZOWI', wrong: true }
+        ]
+    },
+    gate_medrcy: {
+        text: 'DRZWI STAJNI',
+        hint: 'Anioł strażnik pyta: „Jakie dary przynieśli Mędrcy?”',
+        shuffle: true,
+        options: [
+            { text: '🎁 ZŁOTO, KADZIDŁO I MIRRĘ', next: 'medrcy_stajnia' },
+            { text: '🍞 CHLEB, SER I MIÓD', wrong: true },
+            { text: '⚔️ MIECZ, TARCZĘ I HEŁM', wrong: true }
+        ]
+    },
+
+    /* ================= ZAKOŃCZENIA ================= */
+    stajnia:              { text: '★ ZNALAZŁEŚ! ★', hint: 'DZIECIĄTKO W ŻŁOBIE – ZWYCIĘSTWO!', options: [],
+                            cont: { text: '▶ Rozdział II: Czterdziesty dzień – świątynia', next: 'swiatynia' } },
+    stajnia_z_pasterzami: { text: '★ ZNALAZŁEŚ! ★', hint: 'Z PASTERZAMI U ŻŁOBKA – ZWYCIĘSTWO!', options: [],
+                            cont: { text: '▶ Rozdział II: Czterdziesty dzień – świątynia', next: 'swiatynia' } },
+    medrcy_stajnia:       { text: '★ ZNALAZŁEŚ! ★', hint: 'Z MĘDRCAMI U JEZUSA – ZWYCIĘSTWO!', options: [],
+                            cont: { text: '▶ Rozdział III: Sen Mędrców i ucieczka do Egiptu', next: 'sen_medrcow' } },
+    swiatynia_koniec:     { text: '★ W ŚWIĄTYNI! ★', hint: 'SYMEON I ANNA UWIELBIAJĄ BOGA – ZWYCIĘSTWO!', options: [] },
+    nazaret:              { text: '★ DOM W NAZARECIE ★', hint: 'DZIECIĄTKO ROŚNIE W MĄDROŚCI I ŁASCE – ZWYCIĘSTWO!', options: [] },
+    koniec_serc:          { text: 'KONIEC SIŁ', hint: 'Straciłeś wszystkie serca. PRZEGRANA', options: [] }
+};
+
+const WIN  = new Set(['stajnia','stajnia_z_pasterzami','medrcy_stajnia','swiatynia_koniec','nazaret']);
+const LOSE = new Set(['miasto_sam','medrcy_dar_sam','herod_laska','herod_klamstwo','egipt_koniec','pustynia_glod','koniec_serc','gwiazda_zgubiona']);
+
+/* ======================= SPRITE'Y (z oryginału) ======================= */
+        function drawStar(x, y, frame) {
+            const pattern = [
+                [0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                [0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0],
+                [0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0],
+                [0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0],
+                [0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0],
+                [0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0],
+                [1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0],
+                [1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0],
+                [0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0],
+                [0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0],
+                [0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0],
+                [0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0],
+                [0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0],
+                [0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0]
+            ];
+            const glow = Math.sin(frame * 0.04) * 0.3 + 0.7;
+            for (let row = 0; row < 14; row++) {
+                for (let col = 0; col < 20; col++) {
+                    if (pattern[row] && pattern[row][col]) {
+                        const bright = Math.floor(200 + 55 * glow);
+                        ctx.fillStyle = `rgb(${bright}, ${Math.floor(180 + 40 * glow)}, 50)`;
+                        ctx.fillRect(x + col * 2, y + row * 2, 2, 2);
+                    }
+                }
+            }
+        }
+
+        function drawAngel(x, y, frame) {
+            const wing = Math.sin(frame * 0.07) > 0 ? 1 : 0;
+            ctx.fillStyle = '#e8dcc0';
+            ctx.fillRect(x+6, y+6, 12, 12);
+            ctx.fillStyle = '#f5ede0';
+            ctx.fillRect(x+7, y+1, 10, 6);
+            ctx.fillStyle = '#d4b896';
+            ctx.fillRect(x+7, y+2, 10, 5);
+            ctx.fillStyle = '#2a1a0a';
+            ctx.fillRect(x+9, y+4, 2, 2);
+            ctx.fillRect(x+13, y+4, 2, 2);
+            ctx.fillStyle = '#8a4a3a';
+            ctx.fillRect(x+10, y+6, 4, 1);
+            ctx.fillStyle = '#c0b0a0';
+            if (wing) {
+                ctx.fillRect(x-4, y+4, 10, 10);
+                ctx.fillRect(x-8, y+8, 6, 6);
+                ctx.fillRect(x-12, y+11, 6, 4);
+                ctx.fillRect(x+18, y+4, 10, 10);
+                ctx.fillRect(x+22, y+8, 6, 6);
+                ctx.fillRect(x+26, y+11, 6, 4);
+            } else {
+                ctx.fillRect(x-2, y+6, 8, 6);
+                ctx.fillRect(x-6, y+9, 6, 4);
+                ctx.fillRect(x+18, y+6, 8, 6);
+                ctx.fillRect(x+24, y+9, 6, 4);
+            }
+            ctx.fillStyle = '#f5c542';
+            ctx.fillRect(x+7, y-2, 10, 3);
+            ctx.fillRect(x+8, y-4, 8, 2);
+            ctx.fillStyle = '#d4c8b0';
+            ctx.fillRect(x+6, y+16, 12, 6);
+            ctx.fillStyle = '#8a7a6a';
+            ctx.fillRect(x+7, y+22, 4, 2);
+            ctx.fillRect(x+13, y+22, 4, 2);
+        }
+
+        function drawShepherd(x, y, frame) {
+            const step = Math.sin(frame * 0.07) > 0 ? 1 : 0;
+            ctx.fillStyle = '#8a7a5a';
+            ctx.fillRect(x+5, y+8, 10, 10);
+            ctx.fillStyle = '#6a5a3a';
+            ctx.fillRect(x+5, y+8, 10, 3);
+            ctx.fillStyle = '#d4b896';
+            ctx.fillRect(x+6, y+3, 8, 6);
+            ctx.fillStyle = '#b0a090';
+            ctx.fillRect(x+7, y+6, 6, 3);
+            ctx.fillStyle = '#2a1a0a';
+            ctx.fillRect(x+7, y+4, 2, 2);
+            ctx.fillRect(x+11, y+4, 2, 2);
+            ctx.fillStyle = '#6a5a3a';
+            ctx.fillRect(x+16, y+5, 3, 14);
+            ctx.fillStyle = '#4a3a2a';
+            ctx.fillRect(x+17, y+5, 2, 3);
+            ctx.fillStyle = '#5a4a3a';
+            if (step) {
+                ctx.fillRect(x+5, y+18, 4, 2);
+                ctx.fillRect(x+11, y+18, 4, 2);
+            } else {
+                ctx.fillRect(x+4, y+18, 4, 2);
+                ctx.fillRect(x+12, y+18, 4, 2);
+            }
+        }
+
+        function drawMagi(x, y, frame) {
+            const step = Math.sin(frame * 0.05 + 1) > 0 ? 1 : 0;
+            ctx.fillStyle = '#6a2a6a';
+            ctx.fillRect(x+4, y+5, 12, 13);
+            ctx.fillStyle = '#8a4a8a';
+            ctx.fillRect(x+5, y+5, 10, 5);
+            ctx.fillStyle = '#5a1a5a';
+            ctx.fillRect(x+3, y+5, 3, 10);
+            ctx.fillRect(x+14, y+5, 3, 10);
+            ctx.fillStyle = '#d4b896';
+            ctx.fillRect(x+6, y, 8, 6);
+            ctx.fillStyle = '#f5c542';
+            ctx.fillRect(x+5, y-2, 10, 3);
+            ctx.fillRect(x+6, y-5, 8, 3);
+            ctx.fillStyle = '#f0d050';
+            ctx.fillRect(x+7, y-4, 6, 2);
+            ctx.fillStyle = '#2a1a0a';
+            ctx.fillRect(x+7, y+2, 2, 2);
+            ctx.fillRect(x+11, y+2, 2, 2);
+            ctx.fillStyle = '#c04040';
+            ctx.fillRect(x+16, y+8, 4, 5);
+            ctx.fillStyle = '#f5c542';
+            ctx.fillRect(x+16, y+7, 3, 2);
+            ctx.fillStyle = '#4a2a3a';
+            if (step) {
+                ctx.fillRect(x+5, y+18, 4, 2);
+                ctx.fillRect(x+11, y+18, 4, 2);
+            } else {
+                ctx.fillRect(x+4, y+18, 4, 2);
+                ctx.fillRect(x+12, y+18, 4, 2);
+            }
+        }
+
+        function drawHerod(x, y) {
+            ctx.fillStyle = '#4a1a1a';
+            ctx.fillRect(x+4, y+5, 12, 13);
+            ctx.fillStyle = '#6a2a2a';
+            ctx.fillRect(x+5, y+5, 10, 4);
+            ctx.fillStyle = '#3a0a0a';
+            ctx.fillRect(x+3, y+5, 3, 12);
+            ctx.fillRect(x+14, y+5, 3, 12);
+            ctx.fillStyle = '#d4b896';
+            ctx.fillRect(x+6, y, 8, 6);
+            ctx.fillStyle = '#8a7a3a';
+            ctx.fillRect(x+4, y-3, 12, 4);
+            ctx.fillRect(x+5, y-6, 10, 3);
+            ctx.fillStyle = '#c0a040';
+            ctx.fillRect(x+6, y-5, 8, 2);
+            ctx.fillStyle = '#ff2020';
+            ctx.fillRect(x+7, y+2, 2, 2);
+            ctx.fillRect(x+11, y+2, 2, 2);
+            ctx.fillStyle = '#4a2a1a';
+            ctx.fillRect(x+6, y+1, 3, 1);
+            ctx.fillRect(x+11, y+1, 3, 1);
+            ctx.fillStyle = '#6a4a2a';
+            ctx.fillRect(x+17, y+4, 2, 13);
+            ctx.fillStyle = '#f5c542';
+            ctx.fillRect(x+17, y+4, 4, 3);
+            ctx.fillStyle = '#3a1a1a';
+            ctx.fillRect(x+5, y+18, 4, 2);
+            ctx.fillRect(x+11, y+18, 4, 2);
+        }
+
+        function drawBabyJesus(x, y, frame) {
+            const glow = Math.sin(frame * 0.035) * 0.2 + 0.8;
+            for (let i = 0; i < 16; i++) {
+                const angle = i * Math.PI / 8 + frame * 0.012;
+                const r = 14 + Math.sin(frame * 0.04 + i * 2) * 5;
+                const px = x + 10 + Math.cos(angle) * r;
+                const py = y + 10 + Math.sin(angle) * r;
+                ctx.fillStyle = `rgba(255, 200, 80, ${0.12 * glow})`;
+                ctx.fillRect(px, py, 3, 3);
+            }
+            ctx.fillStyle = '#7a6a3a';
+            ctx.fillRect(x, y+16, 20, 6);
+            ctx.fillStyle = '#8a7a4a';
+            ctx.fillRect(x+2, y+15, 16, 3);
+            ctx.fillStyle = '#c0a060';
+            for (let i = 0; i < 8; i++) {
+                ctx.fillRect(x+3+i*2, y+17+Math.sin(i+frame*0.02), 2, 2);
+            }
+            ctx.fillStyle = '#d4b896';
+            ctx.fillRect(x+6, y+3, 8, 7);
+            ctx.fillStyle = '#6a4a2a';
+            ctx.fillRect(x+6, y+2, 8, 3);
+            ctx.fillStyle = '#1a0a0a';
+            ctx.fillRect(x+7, y+5, 2, 2);
+            ctx.fillRect(x+11, y+5, 2, 2);
+            ctx.fillStyle = '#e8a0a0';
+            ctx.fillRect(x+6, y+6, 2, 2);
+            ctx.fillRect(x+12, y+6, 2, 2);
+            ctx.fillStyle = '#c07070';
+            ctx.fillRect(x+9, y+7, 2, 1);
+            ctx.fillStyle = '#f5ede0';
+            ctx.fillRect(x+5, y+10, 10, 6);
+            ctx.fillStyle = `rgba(255, 200, 50, ${0.25 * glow})`;
+            ctx.beginPath();
+            ctx.arc(x+10, y+5, 12, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = `rgba(255, 220, 80, ${0.15 * glow})`;
+            ctx.beginPath();
+            ctx.arc(x+10, y+5, 18, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+
+
+/* ======================= NARZĘDZIA RYSOWANIA ======================= */
+let T = 0, sceneT = 0;
+const fr = () => T * 60;
+function R(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); }
+function at(x, y, s, fn) {
+    const a = Array.prototype.slice.call(arguments, 4);
+    ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.scale(s, s);
+    fn.apply(null, [0, 0].concat(a)); ctx.restore();
+}
+const HEIGHT = { angel: 24, shepherd: 20, magi: 20, herod: 20 };
+function person(kind, x, feet, s, f) {
+    const fn = { angel: drawAngel, shepherd: drawShepherd, magi: drawMagi, herod: drawHerod }[kind];
+    at(x, feet - HEIGHT[kind] * s, s, fn, f);
+}
+function band(colors, y0, y1) {
+    const h = (y1 - y0) / colors.length;
+    colors.forEach((c, i) => R(0, y0 + Math.floor(i * h), W, Math.ceil(h) + 1, c));
+}
+function stars(t, count, maxY, dim) {
+    dim = dim === undefined ? 1 : dim;
+    for (let i = 0; i < count; i++) {
+        const x = (i * 173 + 31) % W, y = (i * 97 + 17) % maxY;
+        const b = Math.sin(i * 2.3 + t * 2) * 0.4 + 0.6, big = i % 7 === 0 ? 2 : 1;
+        ctx.fillStyle = 'rgba(255,240,200,' + (b * 0.75 * dim) + ')';
+        ctx.fillRect(x, y, big, big);
+    }
+}
+function hills(color, base, amp, freq, off) {
+    ctx.fillStyle = color;
+    for (let x = 0; x < W; x += 2) {
+        const y = Math.round(base + Math.sin((x + off) * freq) * amp + Math.sin((x + off) * freq * 2.7 + 1) * amp * 0.35);
+        ctx.fillRect(x, y, 2, H - y);
+    }
+}
+function glow(x, y, r, rgb, a) {
+    for (let i = 3; i >= 1; i--) { ctx.fillStyle = 'rgba(' + rgb + ',' + (a * (4 - i) / 3) + ')'; const s = r * i / 3; ctx.fillRect(Math.round(x - s), Math.round(y - s), Math.round(s * 2), Math.round(s * 2)); }
+}
+function house(x, base, w, h, col, roof, t, seed) {
+    R(x, base - h, w, h, col);
+    const rh = Math.floor((w + 4) / 4);
+    for (let i = 0; i < rh; i++) R(x - 2 + i * 2, base - h - 1 - i, w + 4 - i * 4, 1, roof);
+    const n = w > 24 ? 2 : 1;
+    for (let k = 0; k < n; k++) {
+        const on = Math.sin(t * 3 + seed * 7 + k) > -0.75;
+        R(x + 4 + k * 12, base - h + 6, 3, 4, on ? '#f5c542' : '#2a2418');
+    }
+}
+function fire(x, y, t) {
+    glow(x, y - 6, 26, '255,140,40', 0.12);
+    R(x - 7, y, 14, 3, '#4a2a12'); R(x - 5, y - 1, 10, 2, '#6a3a18');
+    for (let i = 0; i < 5; i++) {
+        const h = 7 + Math.round(Math.sin(t * 9 + i * 1.7) * 3) + (i % 2) * 2;
+        R(x - 5 + i * 2, y - h, 2, h, i % 2 ? '#ffb030' : '#ff6a20');
+    }
+    R(x - 2, y - 6, 4, 5, '#ffe080');
+    for (let k = 0; k < 4; k++) {
+        const p = (t * 0.8 + k * 0.25) % 1;
+        R(x - 3 + Math.sin(k * 3 + t * 2) * 5, y - 8 - p * 28, 1, 1, 'rgba(255,200,80,' + (1 - p) + ')');
+    }
+}
+function sheep(x, y, t, seed) {
+    const b = Math.round(Math.sin(t * 2 + seed) * 1);
+    R(x, y + b, 12, 7, '#e8e4dc'); R(x + 1, y - 1 + b, 10, 2, '#f6f2ea');
+    R(x + 11, y + 1 + b, 5, 5, '#2a2420'); R(x + 2, y + 7, 2, 4, '#2a2420'); R(x + 8, y + 7, 2, 4, '#2a2420');
+}
+function palm(x, y, t) {
+    for (let i = 0; i < 9; i++) R(x + Math.round(i * 0.3), y - i * 3, 3, 3, '#5a3a1a');
+    const sw = Math.round(Math.sin(t * 1.5));
+    [[-12, 2], [-8, -1], [-1, -4], [6, -1], [10, 2]].forEach(f => R(x + 2 + f[0] + sw, y - 28 + f[1], 9, 2, '#2f8a3f'));
+    R(x, y - 26, 5, 3, '#1f6a2f');
+}
+function pyramid(x, base, w, col, shade) {
+    const h = Math.floor(w / 2);
+    for (let i = 0; i < h; i++) R(x + i, base - i, w - 2 * i, 1, col);
+    for (let i = 0; i < h; i++) R(x + w / 2, base - i, Math.max(0, w / 2 - i), 1, shade);
+}
+function camel(x, y, t, walk) {
+    const c = '#b8864a', d = '#8a5e30', ph = walk ? Math.sin(t * 6) : 0;
+    [[8, ph], [12, -ph], [22, -ph], [26, ph]].forEach(l => R(x + l[0], y - 12 + (l[1] > 0 ? -2 : 0), 2, 12, d));
+    R(x + 6, y - 22, 24, 10, c); R(x + 13, y - 27, 6, 6, c); R(x + 3, y - 20, 3, 2, d);
+    R(x + 30, y - 30, 4, 14, c); R(x + 32, y - 33, 8, 4, c); R(x + 38, y - 31, 2, 2, '#2a1a0a');
+    R(x + 8, y - 22, 20, 3, '#c04040');
+    R(x + 13, y - 36, 6, 9, '#6a2a6a'); R(x + 14, y - 40, 4, 4, '#d4b896'); R(x + 13, y - 42, 6, 2, '#f5c542');
+}
+function smoke(x, y, t) {
+    for (let k = 0; k < 6; k++) {
+        const p = (t * 0.25 + k / 6) % 1;
+        ctx.fillStyle = 'rgba(190,190,205,' + (0.35 * (1 - p)) + ')';
+        ctx.fillRect(Math.round(x + Math.sin(t + k * 2) * 4), Math.round(y - p * 36), 3 + k % 3, 3 + k % 3);
+    }
+}
+const NIGHT = ['#04041a', '#080828', '#0c0c34', '#14143e', '#1e1a40', '#2a1c3a'];
+
+/* ======================= SCENY ======================= */
+function sceneStart(t) {
+    band(NIGHT, 0, 140); stars(t, 70, 110);
+    hills('#12123a', 128, 6, 0.02, 0); hills('#0c0c28', 140, 5, 0.03, 50);
+    R(272, 88, 18, 62, '#0a0a1e'); R(270, 84, 22, 5, '#0a0a1e');
+    R(276, 96, 4, 6, Math.sin(t * 4) > -0.6 ? '#d03a3a' : '#7a2020');
+    [[8, 34, 22], [40, 28, 30], [76, 40, 20], [104, 30, 26], [196, 36, 24], [232, 30, 30]].forEach((h, i) => house(h[0], 150, h[1], h[2], '#0e0c22', '#080618', t, i));
+    R(0, 148, W, 52, '#0a0814');
+    fire(24, 150, t);
+    bats(t); crowd(t, 190, 5, 1, true);
+    at(138, 18, 1, drawStar, fr());
+    const ax = 160 + Math.sin(t * 0.6) * 110, ay = 56 + Math.sin(t * 1.3) * 6;
+    person('angel', ax, ay + 48, 2, fr());
+}
+function sceneInn(t) {
+    band(NIGHT, 0, 140); stars(t, 60, 70);
+    hills('#12123a', 132, 5, 0.02, 0);
+    R(0, 150, W, 50, '#1a120c');
+    for (let i = 0; i < 40; i++) R((i * 41) % W, 152 + (i * 13) % 46, 3, 1, '#2a1e14');
+    R(70, 68, 180, 82, '#3a2616');
+    for (let y = 72; y < 150; y += 6) R(70, y, 180, 1, '#2e1c10');
+    for (let i = 0; i < 19; i++) { const w = 110 + Math.round(i * 90 / 18); R(160 - w / 2, 50 + i, w, 1, i % 3 ? '#2a1810' : '#3a2214'); }
+    R(205, 38, 10, 16, '#2a1a14'); smoke(210, 38, t);
+    [[88, 82], [200, 82], [88, 116]].forEach((p, i) => {
+        const on = Math.sin(t * 3 + i * 2) > -0.8;
+        R(p[0], p[1], 22, 18, '#1a0e06'); R(p[0] + 2, p[1] + 2, 18, 14, on ? '#f5c542' : '#5a4418');
+        R(p[0] + 10, p[1] + 2, 2, 14, '#2a1608'); R(p[0] + 2, p[1] + 8, 18, 2, '#2a1608');
+        if (on) R(p[0] + 4 + Math.round(Math.sin(t + i) * 3 + 3), p[1] + 7, 3, 6, '#3a2208');
+    });
+    R(200, 116, 22, 18, '#1a0e06'); R(202, 118, 18, 14, '#f5c542'); R(210, 118, 2, 14, '#2a1608');
+    R(146, 104, 28, 46, '#2a1608'); R(148, 106, 24, 44, '#5a3a1a'); R(150, 108, 20, 42, '#6a4624'); R(166, 128, 3, 3, '#f5c542');
+    R(158, 94, 4, 6, '#f5c542'); glow(160, 97, 12, '255,200,80', 0.25);
+    R(110, 92, 2, 10, '#2a1608'); R(98, 100, 26, 14, '#6a4a22'); R(104, 103, 8, 8, '#d8d0b8'); R(112, 105, 3, 4, '#d8d0b8');
+    ctx.fillStyle = 'rgba(255,190,80,' + (0.12 + Math.sin(t * 5) * 0.02) + ')';
+    for (let y = 150; y < 200; y += 2) { const w = 30 + (y - 150) * 1.2; ctx.fillRect(Math.round(160 - w / 2), y, Math.round(w), 2); }
+}
+function sceneField(t, znak, chor) {
+    band(NIGHT, 0, 140); stars(t, 80, 110);
+    hills('#0e1a2e', 118, 8, 0.018, 0); hills('#0b2418', 138, 7, 0.025, 40);
+    R(0, 150, W, 50, '#0a1f14');
+    for (let i = 0; i < 40; i++) R((i * 53) % W, 152 + (i * 29) % 44, 2, 2, '#14402a');
+    const ax = 120 + Math.sin(t * 0.9) * 14, ay = 36 + Math.sin(t * 1.4) * 5;
+    for (let y = Math.round(ay + 50); y < 160; y += 2) { const w = 14 + (y - ay) * (znak ? 0.9 : 0.5); ctx.fillStyle = 'rgba(255,220,120,' + (znak ? 0.1 : 0.06) + ')'; ctx.fillRect(Math.round(ax + 12 - w / 2), y, Math.round(w), 2); }
+    person('angel', ax, ay + 48, 2, fr());
+    if (chor) {
+        for (let i = 0; i < 6; i++) { const cx = 20 + i * 52 + Math.sin(t * 0.8 + i) * 8, cy = 18 + (i % 2) * 24 + Math.sin(t * 1.3 + i) * 4; glow(cx + 12, cy + 12, 16, '255,230,140', 0.1); person('angel', cx, cy + 24, 1, fr() + i * 9); }
+    }
+    [[30, 168, 0], [70, 174, 1], [150, 166, 2], [188, 176, 3]].forEach(s => sheep(s[0], s[1], t, s[2]));
+    fire(270, 176, t);
+    person('shepherd', 214, 178 + Math.round(Math.sin(t * 2)), 2, 0);
+}
+function sceneLost(t) {
+    band(NIGHT, 0, 140); stars(t, 40, 100, 0.4);
+    hills('#0e0e2a', 126, 6, 0.02, 0);
+    [[8, 34, 22], [48, 28, 30], [190, 36, 24], [236, 30, 30]].forEach((h, i) => house(h[0], 150, h[1], h[2], '#0a0a18', '#06060f', t, i + 9));
+    R(0, 148, W, 52, '#0a0810');
+    const x = 160 + Math.sin(t * 0.8) * 90;
+    glow(x + 46, 150, 20, '255,200,100', 0.12 + Math.sin(t * 7) * 0.02);
+    person('shepherd', x, 186, 2, fr());
+    R(x + 44, 150, 4, 5, '#f5c542');
+    for (let k = 0; k < 4; k++) { const o = (t * 12 + k * 80) % (W + 120) - 60; ctx.fillStyle = 'rgba(150,150,180,0.14)'; ctx.fillRect(Math.round(o), 110 + k * 22, 120, 16); }
+}
+function sceneJourney(t, o) {
+    band(NIGHT, 0, 140); stars(t, 60, 110, o.star ? 1 : 0.5);
+    if (o.star) { at(200, 12, 1, drawStar, fr()); }
+    else { for (let k = 0; k < 3; k++) { const x = (t * 6 + k * 120) % (W + 100) - 50; ctx.fillStyle = 'rgba(20,20,44,0.92)'; ctx.fillRect(Math.round(x), 18 + k * 12, 90, 10); ctx.fillRect(Math.round(x + 14), 14 + k * 12, 60, 6); } }
+    const sp = 14;
+    hills('#14143a', 122, 8, 0.017, t * sp * 0.3); hills('#0d0d2a', 134, 7, 0.026, t * sp * 0.6 + 100);
+    R(0, 140, W, 60, '#14100c');
+    for (let y = 140; y < H; y++) { const hw = 3 + Math.round((y - 140) * 1.5); R(160 - hw, y, hw * 2, 1, (y >> 2) % 2 ? '#3a2c1c' : '#34281a'); }
+    for (let k = 0; k < 6; k++) R(159, 140 + ((k * 10 + t * 30) % 60), 2, 2, '#5a4a30');
+    for (let k = 0; k < 8; k++) {
+        const yy = 142 + (k * 8 + t * 30) % 56, hw = 3 + (yy - 140) * 1.5, sz = 2 + Math.round((yy - 140) / 8), side = k % 2 ? 1 : -1;
+        R(160 + side * (hw + 6 + (k % 3) * 8), yy, sz, sz, '#0e2a1a');
+    }
+    if (o.who === 'magi') { [110, 160, 210].forEach((x, i) => person('magi', x - 12, 192 + Math.round(Math.sin(t * 5 + i) * 1), 2, fr() + i * 15)); }
+    else if (o.who === 'solo') { person('shepherd', 148, 192, 2, fr()); }
+    else if (o.who === 'leaving') { [0, 1, 2].forEach(i => person('magi', 80 + sceneT * 34 + i * 34, 192, 2, fr() + i * 15)); }
+}
+function scenePalace(t, angry, scribes) {
+    R(0, 0, W, H, '#1a0608');
+    for (let y = 0; y < 130; y += 10) for (let x = ((y / 10) % 2) * 10 - 10; x < W; x += 20) R(x, y, 19, 9, '#2a0c10');
+    for (let j = 0; j < 7; j++) for (let i = 0; i < 16; i++) R(i * 20, 130 + j * 10, 20, 10, (i + j) % 2 ? '#3a1618' : '#2a0e10');
+    [20, 150, 284].forEach(x => { R(x, 0, 16, 130, '#4a2024'); R(x + 2, 0, 3, 130, '#6a2c30'); R(x - 3, 0, 22, 6, '#5a282c'); R(x - 3, 124, 22, 6, '#5a282c'); });
+    [76, 244].forEach((x, i) => {
+        glow(x, 62, 34, '255,120,30', 0.1 + Math.sin(t * 8 + i) * 0.015);
+        R(x - 2, 66, 4, 14, '#3a2a1a'); R(x - 4, 62, 8, 4, '#5a4a2a');
+        const h = 8 + Math.round(Math.sin(t * 9 + i * 2) * 2);
+        R(x - 3, 62 - h, 6, h, '#ff8a20'); R(x - 1, 62 - h + 3, 2, h - 3, '#ffe080');
+    });
+    R(176, 0, 24, 46, '#8a1a1a'); for (let i = 0; i < 6; i++) R(176 + i * 2, 46 + i, 24 - i * 4, 1, '#8a1a1a');
+    R(184, 14, 8, 8, '#f5c542'); R(184, 10, 2, 4, '#f5c542'); R(190, 10, 2, 4, '#f5c542');
+    R(216, 60, 44, 70, '#5a3a10'); R(220, 64, 36, 62, '#7a4e18'); R(212, 52, 6, 20, '#f5c542'); R(258, 52, 6, 20, '#f5c542'); R(214, 126, 48, 6, '#3a2208');
+    person('herod', 224 + (angry ? Math.round(Math.sin(t * 20)) : 0), 130 + Math.round(Math.sin(t * 2)), 2, 0);
+    if (scribes) {
+        R(34, 150, 112, 6, '#6a4a2a'); R(40, 156, 4, 14, '#5a3a1a'); R(136, 156, 4, 14, '#5a3a1a');
+        [44, 76, 108].forEach((x, i) => { human(x, 150 + Math.round(Math.sin(t * 1.5 + i) * 1), 2, P_UCZONY, t, false); });
+        R(60, 146, 16, 4, '#f0e8c0'); R(100, 147, 12, 3, '#f0e8c0');
+    }
+    if (angry) { ctx.fillStyle = 'rgba(200,0,0,' + (0.1 + 0.08 * Math.sin(t * 10)) + ')'; ctx.fillRect(0, 0, W, H); }
+}
+function sceneDungeon(t, id) {
+    R(0, 0, W, H, '#0a0a0e');
+    for (let y = 0; y < 150; y += 12) for (let x = ((y / 12) % 2) * 12 - 12; x < W; x += 24) R(x, y, 23, 11, '#15151d');
+    R(0, 150, W, 50, '#0e0e14');
+    R(246, 14, 28, 22, '#2a3a6a'); R(248, 16, 24, 18, '#3a4c86'); R(258, 14, 3, 22, '#10101a'); R(246, 24, 28, 3, '#10101a');
+    for (let y = 36; y < 150; y += 2) { const o = Math.round((y - 36) * 0.5); ctx.fillStyle = 'rgba(120,150,220,0.06)'; ctx.fillRect(220 - o, y, 40, 2); }
+    glow(40, 70, 26, '255,120,30', 0.05); R(38, 70, 4, 10, '#3a2a1a'); R(36, 64, 8, 6 + Math.round(Math.sin(t * 8)), '#ff8a20');
+    for (let k = 0; k < 2; k++) { const y = 80 + ((t * 60 + k * 50) % 90); R(96 + k * 60, y, 2, 3, '#6a8ac0'); }
+    person('shepherd', 150, 176, 2, 0);
+    for (let x = 6; x < W; x += 24) { R(x, 0, 4, H, '#3a3a44'); R(x, 0, 1, H, '#5a5a66'); }
+    R(0, 30, W, 5, '#3a3a44'); R(0, 150, W, 5, '#3a3a44');
+    if (id === 'lochy_sen') {
+        for (let y = 36; y < 150; y += 2) { const w = 24 + (y - 36) * 0.5; ctx.fillStyle = 'rgba(255,230,140,0.08)'; ctx.fillRect(Math.round(160 - w / 2), y, Math.round(w), 2); }
+        glow(160, 90, 40, '255,230,140', 0.16);
+        person('angel', 138, 118 + Math.round(Math.sin(t * 2) * 3), 2, fr());
+    }
+}
+function sceneEgypt(t, camp) {
+    band(['#2a1040', '#4a1a50', '#7a2a5a', '#b84a4a', '#e07a3a', '#f0a840'], 0, 128);
+    stars(t, 25, 40, 0.6);
+    for (let r = 0; r < 22; r++) { const w = Math.round(Math.sqrt(22 * 22 - r * r)); R(236 - w, 128 - r, w * 2, 1, r > 16 ? '#ffe090' : '#ffc860'); }
+    pyramid(36, 130, 74, '#a8743a', '#7a4e28'); pyramid(120, 130, 46, '#9a6a34', '#6e4624');
+    hills('#c8903a', 130, 5, 0.02, 0); hills('#a8742c', 144, 6, 0.018, camp ? 0 : t * 6);
+    R(0, 158, W, 42, '#8a5e24');
+    for (let i = 0; i < 30; i++) R((i * 47) % W, 160 + (i * 17) % 38, 3, 1, '#a8742c');
+    palm(280, 156, t); palm(16, 160, t);
+    if (!camp) { const x = (t * 22) % 420 - 60; camel(x, 182, t, true); }
+    else {
+        camel(120, 184, t, false);
+        R(60, 150, 40, 3, '#6a3a1a'); for (let i = 0; i < 16; i++) R(64 + i * 2, 150 - i, 32 - i * 4 < 0 ? 0 : 32 - i * 4, 1, '#c8b090');
+        fire(220, 182, t);
+        ctx.fillStyle = 'rgba(10,0,30,0.25)'; ctx.fillRect(0, 0, W, H);
+    }
+}
+/* --- stajnia (wygrana) --- */
+const parts = [];
+function spawnSpark(burst) {
+    parts.push({ x: 70 + Math.random() * 180, y: 130 + Math.random() * 25, vx: (Math.random() - .5) * 8, vy: -(12 + Math.random() * 28) * (burst ? 1.6 : 1), life: 0, max: 1.5 + Math.random() * 2, c: Math.random() < .5 ? '255,220,100' : '255,255,255' });
+}
+function ease(p) { p = Math.max(0, Math.min(1, p)); return 1 - Math.pow(1 - p, 3); }
+function sceneStable(t, st, id) {
+    band(['#04041a', '#080828', '#10103a', '#1c1a44', '#2e2040', '#4a2c3a'], 0, 140); stars(t, 80, 100);
+    hills('#14143a', 124, 6, 0.02, 0);
+    R(0, 148, W, 52, '#2a1a10');
+    for (let i = 0; i < 50; i++) R((i * 37) % W, 150 + (i * 19) % 48, 4, 1, '#3a2814');
+    const pulse = 0.05 + Math.sin(t * 2) * 0.02;
+    for (let y = 44; y < 100; y += 2) { const w = 10 + (y - 44) * 0.7; ctx.fillStyle = 'rgba(255,220,100,' + pulse + ')'; ctx.fillRect(Math.round(160 - w / 2), y, Math.round(w), 2); }
+    R(86, 100, 148, 50, '#3a2412'); for (let x = 90; x < 234; x += 8) R(x, 100, 1, 50, '#2a180a');
+    glow(160, 132, 50, '255,200,80', 0.22);
+    for (let y = 60; y < 101; y++) { const hw = Math.round((y - 60) * 2.3); R(160 - hw, y, hw * 2, 1, (y % 6 < 3) ? '#4a2c14' : '#3a2210'); }
+    R(84, 100, 6, 50, '#5a3a1a'); R(230, 100, 6, 50, '#5a3a1a');
+    R(86, 146, 148, 6, '#c8a040'); for (let i = 0; i < 24; i++) R(88 + (i * 13) % 140, 146 + (i % 3) * 2, 6, 1, '#e8c060');
+    at(140, 14, 1, drawStar, fr());
+    if (id.indexOf('gate') === 0) {
+        R(110, 98, 100, 52, '#2a1608'); R(114, 102, 92, 48, '#5a3a1a');
+        for (let x = 118; x < 206; x += 12) R(x, 102, 2, 48, '#4a2c14');
+        R(114, 122, 92, 3, '#3a2210'); R(158, 102, 4, 48, '#2a1608'); R(159, 106, 2, 40, '#f5c542');
+        glow(160, 132, 44, '255,200,80', 0.16 + Math.sin(t * 3) * 0.03);
+        person('angel', 40, 132 + Math.round(Math.sin(t * 2) * 3), 2, fr());
+        return;
+    }
+    R(140, 134, 40, 12, '#6a4a22'); R(142, 132, 36, 4, '#d8b050');
+    at(140, 106, 2, drawBabyJesus, fr());
+    if (id === 'medrcy_stajnia') { R(112, 140, 10, 8, '#c04040'); R(112, 140, 10, 2, '#f5c542'); R(124, 143, 8, 6, '#7a3a9a'); R(124, 143, 8, 2, '#f5c542'); R(192, 141, 9, 7, '#2a7a8a'); R(192, 141, 9, 2, '#f5c542'); }
+    if (id === 'stajnia_z_pasterzami') { sheep(96, 156, t, 0); sheep(214, 160, t, 2); }
+    const aY = -40 + ease(st / 1.4) * 80;
+    person('angel', 40, aY + 48 + Math.round(Math.sin(t * 2) * 3), 2, fr());
+    const sp = ease((st - 0.3) / 2.2), sx = -40 + sp * 100;
+    person('shepherd', sx, 192, 2, sp < 1 ? fr() : 0);
+    const mp = ease((st - 0.8) / 2.2), mx = 350 - mp * 112;
+    [0, 1, 2].forEach(i => person('magi', mx + i * 26 - (i === 2 ? 0 : 0), 192 + (i % 2), 2, mp < 1 ? fr() + i * 12 : 0));
+}
+
+/* ======================= NOWE POSTACIE I SCENY ======================= */
+function human(x, feet, s, o, t, walk) {
+    const sk = o.skin || '#e0b890', st = walk ? (Math.sin(t * 7) > 0 ? 1 : 0) : 0;
+    ctx.save(); ctx.translate(Math.round(x), Math.round(feet - 20 * s)); ctx.scale(s, s);
+    R(3, 16, 2, 4 - st, '#2a1a10'); R(7, 16, 2, 3 + st, '#2a1a10');
+    R(2, 8, 8, 9, o.robe); R(2, 16, 8, 1, o.trim || o.robe);
+    if (o.up) { R(0, 5, 2, 6, o.robe); R(10, 5, 2, 6, o.robe); R(0, 3, 2, 2, sk); R(10, 3, 2, 2, sk); }
+    else { R(0, 9, 2, 6, o.robe); R(10, 9, 2, 6, o.robe); R(0, 14, 2, 2, sk); R(10, 14, 2, 2, sk); }
+    if (o.baby) { R(1, 10, 9, 4, '#f6eed8'); R(7, 8, 4, 4, '#e8c8a0'); }
+    R(3, 2, 6, 6, sk);
+    if (o.hair) R(3, 1, 6, 2, o.hair);
+    if (o.hat) R(2, 0, 8, 2, o.hat);
+    if (o.veil) { R(2, 0, 8, 3, o.veil); R(1, 3, 2, 9, o.veil); R(9, 3, 2, 9, o.veil); }
+    R(4, 4, 1, 1, '#1a1a1a'); R(7, 4, 1, 1, '#1a1a1a');
+    if (o.beard) R(3, 6, 6, 3, o.beard);
+    ctx.restore();
+}
+const P_MARIA = { robe: '#2a5ab0', trim: '#f0e8d0', veil: '#f4f0e4' };
+const P_JOZEF = { robe: '#8a5a2a', trim: '#5a3a18', hair: '#4a2a10', beard: '#4a2a10' };
+const P_SYMEON = { robe: '#8a8a9a', trim: '#e8e8f0', hair: '#e8e8e8', beard: '#f0f0f0' };
+const P_ANNA = { robe: '#6a3a7a', trim: '#3a1a4a', veil: '#3a2a4a' };
+const P_URZEDNIK = { robe: '#9a2a2a', trim: '#d0a020', hair: '#2a1a10', hat: '#9a2a2a' };
+const P_UCZONY = { robe: '#d8d0b8', trim: '#3a5a9a', hair: '#4a4a4a', beard: '#8a8a8a', hat: '#3a5a9a' };
+const P_LEWITA = { robe: '#e8e8f0', trim: '#2a4a9a', hair: '#3a2410', beard: '#3a2410' };
+function crowd(t, feet, n, seed, night) {
+    const day = ['#8a5a2a', '#4a6a8a', '#7a4a6a', '#6a7a3a', '#9a7a3a', '#6a5a5a'];
+    const dark = ['#2a2038', '#1e2a3a', '#2a1e30', '#1e2a22', '#2e281e', '#26222a'];
+    const cols = night ? dark : day;
+    for (let i = 0; i < n; i++) {
+        const sp = 8 + ((i * 7 + seed) % 9), dir = i % 2 ? 1 : -1;
+        const x = (((i * 61 + seed * 17 + t * sp * dir) % (W + 60)) + (W + 60)) % (W + 60) - 30;
+        human(x, feet + (i % 3) * 4, 1, { robe: cols[i % 6], trim: night ? '#18141e' : '#3a2a1a', hair: night ? '#100c14' : '#3a2410', skin: night ? '#5a4a48' : '#e0b890', veil: i % 4 === 0 ? (night ? '#3a3448' : '#e8e0d0') : null }, t + i, true);
+    }
+}
+function bats(t) {
+    for (let i = 0; i < 3; i++) {
+        const x = (t * (18 + i * 6) + i * 110) % (W + 40) - 20, y = 60 + i * 14 + Math.sin(t * 2 + i) * 8, f = Math.sin(t * 16 + i) > 0 ? 1 : 0;
+        ctx.fillStyle = '#05050f';
+        ctx.fillRect(Math.round(x), Math.round(y), 3, 2); ctx.fillRect(Math.round(x - 4), Math.round(y - f), 4, 2); ctx.fillRect(Math.round(x + 3), Math.round(y - f), 4, 2);
+    }
+}
+function txt(s, x, y, size, color, align) {
+    ctx.font = 'bold ' + size + 'px "Courier New", monospace'; ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#000'; ctx.fillText(s, x + 1, y + 1); ctx.fillStyle = color; ctx.fillText(s, x, y);
+}
+function sleeper(x, y, robe, crown, t, seed) {
+    R(x, y + 2, 28, 7, robe); R(x + 2, y + 1, 24, 2, '#e8e0d0');
+    R(x + 26, y, 8, 8, '#e0b890'); R(x + 26, y - 1, 8, 2, '#3a2410');
+    if (crown) R(x + 27, y - 3, 6, 2, '#f5c542');
+    const p = (t * 0.5 + seed * 0.33) % 1;
+    ctx.font = 'bold 8px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(255,255,255,' + (1 - p) + ')'; ctx.fillText('z', x + 36 + p * 6, y - 4 - p * 14);
+}
+function dove(x, y, t, seed) {
+    const up = Math.sin(t * 14 + seed) > 0;
+    R(x, y, 6, 3, '#f4f4f8'); R(x + 5, y - 1, 3, 3, '#f4f4f8'); R(x + 1, up ? y - 3 : y + 3, 4, 2, '#dcdce8'); R(x + 8, y, 2, 1, '#e8b040');
+}
+function menorah(x, base, t) {
+    R(x - 10, base - 2, 20, 3, '#d8b040'); R(x - 2, base - 16, 4, 14, '#d8b040'); R(x - 16, base - 16, 32, 2, '#d8b040');
+    for (let i = -3; i <= 3; i++) {
+        const ax = x + i * 5, f = Math.round(Math.sin(t * 9 + i * 1.7) * 1.2);
+        R(ax, base - 26, 2, 11, '#d8b040'); R(ax, base - 31 - f, 2, 4 + f, '#ffcc40'); R(ax, base - 29, 2, 2, '#fff0a0');
+    }
+    glow(x, base - 22, 30, '255,200,80', 0.1);
+}
+const DAY = ['#78b4e8', '#8cc2ee', '#a2d0f2', '#bddcf4', '#d8ecf8'];
+function sun(cx, cy, r, col) { for (let i = 0; i < r; i++) { const w = Math.round(Math.sqrt(r * r - i * i)); R(cx - w, cy - i, w * 2, 1, col); R(cx - w, cy + i, w * 2, 1, col); } }
+
+/* --- Rynek (spis ludności) --- */
+function sceneMarket(t) {
+    band(DAY, 0, 120); sun(262, 26, 11, '#fff3b0');
+    for (let k = 0; k < 3; k++) { const x = (t * 4 + k * 120) % (W + 80) - 40; ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(Math.round(x), 20 + k * 14, 44, 6); ctx.fillRect(Math.round(x + 8), 16 + k * 14, 26, 6); }
+    hills('#a8b878', 112, 5, 0.02, 0);
+    [[0, 60, 78], [58, 52, 60], [112, 70, 86], [190, 62, 70], [250, 70, 80]].forEach((b, i) => {
+        R(b[0], 150 - b[2], b[1], b[2], i % 2 ? '#e0cfa0' : '#d8c898'); R(b[0], 150 - b[2], b[1], 3, '#b8a678');
+        R(b[0] + 8, 150 - b[2] + 14, 6, 9, '#4a3a22'); R(b[0] + b[1] - 16, 150 - b[2] + 14, 6, 9, '#4a3a22'); R(b[0] + b[1] / 2 - 5, 136, 10, 14, '#6a4a2a');
+    });
+    R(0, 150, W, 50, '#c8b080');
+    for (let i = 0; i < 40; i++) R((i * 47) % W, 152 + (i * 13) % 46, 6, 1, '#b8a070');
+    for (let i = 0; i < 12; i++) R(212 + i * 4, 118, 4, 6, i % 2 ? '#c04040' : '#f0e8d0'); R(212, 124, 48, 2, '#8a2a2a'); R(214, 126, 3, 26, '#6a4a2a'); R(256, 126, 3, 26, '#6a4a2a'); R(220, 144, 32, 6, '#a8884a');
+    R(38, 66, 3, 86, '#6a4a2a'); R(32, 58, 15, 9, '#f5c542'); R(41, 74, 18 + Math.round(Math.sin(t * 3) * 1), 18, '#9a1a1a');
+    R(96, 142, 60, 6, '#6a4a2a'); R(100, 148, 4, 12, '#5a3a1a'); R(148, 148, 4, 12, '#5a3a1a'); R(108, 138, 16, 4, '#f0e8c0'); R(130, 139, 12, 3, '#f0e8c0');
+    human(110, 158, 2, P_URZEDNIK, t, false);
+    crowd(t, 176, 9, 3, false);
+    const x = (t * 6) % 400 - 50;
+    human(x, 190, 2, P_JOZEF, t, true); human(x + 28, 190, 2, P_MARIA, t + 1, true);
+}
+/* --- Sny (Mędrców, Józefa) --- */
+function sceneDream(t, who) {
+    band(['#06061e', '#0a0a30', '#10104a', '#181860', '#202078', '#2a2a8a'], 0, 150); stars(t, 90, 120);
+    sun(60, 42, 12, '#f0ecd0'); hills('#10103a', 140, 4, 0.02, 0); R(0, 150, W, 50, '#14102a');
+    for (let k = 0; k < 4; k++) { const x = (t * 5 + k * 90) % (W + 100) - 50; ctx.fillStyle = 'rgba(180,180,240,0.12)'; ctx.fillRect(Math.round(x), 70 + k * 14, 70, 8); ctx.fillRect(Math.round(x + 10), 64 + k * 14, 40, 8); }
+    const ay = 48 + Math.sin(t * 1.4) * 5;
+    for (let y = Math.round(ay + 50); y < 160; y += 2) { const w = 16 + (y - ay) * 0.7; ctx.fillStyle = 'rgba(255,230,140,0.07)'; ctx.fillRect(Math.round(160 - w / 2), y, Math.round(w), 2); }
+    glow(160, ay + 24, 34, '255,230,140', 0.12);
+    person('angel', 148, ay + 48, 2, fr());
+    if (who === 'medrcy') { sleeper(60, 164, '#7a3a9a', true, t, 0); sleeper(140, 170, '#2a7a8a', true, t, 1); sleeper(220, 164, '#9a4a2a', true, t, 2); }
+    else { sleeper(104, 168, '#8a5a2a', false, t, 0); sleeper(184, 168, '#2a5ab0', false, t, 1); }
+}
+/* --- Gwiazda: minigra --- */
+const mg = { on: false, t: 0, score: 0, px: 160, tx: 160, key: 0, finished: false, ok: false, cfg: null };
+const MG_DUR = 16, MG_LEAD = 2.2, MG_NEED = 0.6;
+let mgToken = 0;
+function mgStar(t) { return 160 + Math.sin(t * 0.8) * 100 + Math.sin(t * 2.1 + 1) * 24; }
+function mgStart(cfg) { mg.on = true; mg.t = 0; mg.score = 0; mg.px = mg.tx = 160; mg.key = 0; mg.finished = false; mg.cfg = cfg; mgToken++; canvas.style.touchAction = 'none'; }
+function mgStop() { mg.on = false; mgToken++; canvas.style.touchAction = ''; }
+function mgUpdate(dt) {
+    if (!mg.on) return;
+    mg.t += dt;
+    if (mg.key) mg.tx = Math.max(10, Math.min(W - 10, mg.tx + mg.key * 150 * dt));
+    mg.px += (mg.tx - mg.px) * Math.min(1, dt * 9);
+    const run = mg.t - MG_LEAD;
+    if (run > 0 && !mg.finished) {
+        if (Math.abs(mg.px - mgStar(run)) < 26) mg.score += dt;
+        if (run >= MG_DUR) {
+            mg.finished = true; mg.ok = mg.score / MG_DUR >= MG_NEED;
+            notify(mg.ok ? 'Dobrze! Gwiazda cię prowadzi ⭐' : 'Zgubiłeś gwiazdę…');
+            const tk = mgToken;
+            setTimeout(() => { if (tk !== mgToken) return; const c = mg.cfg, ok = mg.ok; mgStop(); goTo(ok ? c.win : c.fail, true, false); }, 1300);
+        }
+    }
+}
+function sceneStarChase(t) {
+    const run = Math.max(0, mg.t - MG_LEAD), sx = mgStar(run);
+    const on = mg.on && mg.t > MG_LEAD && !mg.finished && Math.abs(mg.px - sx) < 26;
+    band(NIGHT, 0, 140); stars(t, 70, 110);
+    hills('#14143a', 122, 8, 0.017, t * 6); hills('#0d0d2a', 134, 7, 0.026, t * 12 + 100);
+    R(0, 140, W, 60, '#14100c');
+    for (let y = 140; y < H; y++) { const hw = 3 + Math.round((y - 140) * 1.5); R(160 - hw, y, hw * 2, 1, (y >> 2) % 2 ? '#3a2c1c' : '#34281a'); }
+    for (let y = 44; y < 170; y += 2) { const w = 12 + (y - 44) * 0.55; ctx.fillStyle = on ? 'rgba(255,230,120,0.24)' : 'rgba(255,230,120,0.05)'; ctx.fillRect(Math.round(sx - w / 2), y, Math.round(w), 2); }
+    at(sx - 20, 12, 1, drawStar, fr());
+    human(mg.px - 12, 192, 2, { robe: '#6a4a2a', trim: '#3a2410', hair: '#3a2410', hat: '#8a6a3a' }, T, Math.abs(mg.tx - mg.px) > 2);
+    const need = Math.min(1, mg.score / (MG_DUR * MG_NEED));
+    R(10, 6, 300, 8, '#000'); R(11, 7, 298, 6, '#2a2a44'); R(11, 7, Math.round(298 * need), 6, need >= 1 ? '#6ad06a' : '#f5c542');
+    const left = Math.max(0, 1 - run / MG_DUR); R(10, 16, Math.round(300 * left), 2, '#7a8ac8');
+    if (mg.t < MG_LEAD) txt(mg.t < MG_LEAD - 1 ? 'GOTOWI?' : 'START!', 160, 96, 18, '#f5c542');
+    if (mg.finished) txt(mg.ok ? 'DOBRZE!' : 'ZA DALEKO OD GWIAZDY', 160, 96, 16, mg.ok ? '#8aff8a' : '#ff8a8a');
+}
+/* --- Świątynia --- */
+function sceneTemple(t, mode) {
+    band(DAY, 0, 120); sun(264, 24, 12, '#fff3b0'); hills('#a8b878', 118, 5, 0.02, 0);
+    R(30, 52, 260, 92, '#e4d4a0');
+    for (let y = 56; y < 144; y += 10) for (let x = 30 + ((y / 10) % 2) * 15; x < 290; x += 30) R(x, y, 29, 9, (x + y) % 3 ? '#e8d9ae' : '#dccb96');
+    R(22, 44, 276, 10, '#d8b040'); R(22, 44, 276, 2, '#f2d060');
+    [46, 86, 226, 266].forEach(x => { R(x, 54, 14, 90, '#f4e8c0'); R(x + 2, 54, 3, 90, '#fffbe8'); R(x - 2, 54, 18, 4, '#d8b040'); R(x - 2, 140, 18, 4, '#d8b040'); });
+    R(138, 66, 44, 8, '#d8b040'); R(140, 74, 40, 70, '#2a1a0e'); glow(160, 120, 24, '255,200,80', 0.14 + Math.sin(t * 3) * 0.02);
+    for (let i = 0; i < 5; i++) R(20 - i * 6, 144 + i * 4, 280 + i * 12, 4, i % 2 ? '#c8b888' : '#d8c898');
+    R(0, 164, W, 36, '#c8b890');
+    R(236, 162, 40, 22, '#a89868'); R(240, 158, 32, 4, '#8a7a50');
+    for (let i = 0; i < 4; i++) { const h = 6 + Math.round(Math.sin(t * 9 + i * 2) * 2); R(246 + i * 6, 158 - h, 4, h, i % 2 ? '#ffb030' : '#ff6a20'); }
+    for (let k = 0; k < 5; k++) { const p = (t * 0.4 + k / 5) % 1; ctx.fillStyle = 'rgba(200,200,210,' + (0.4 * (1 - p)) + ')'; ctx.fillRect(Math.round(254 + Math.sin(t + k) * 4), Math.round(150 - p * 40), 3, 3); }
+    for (let i = 0; i < 3; i++) dove(100 + Math.sin(t * 0.7 + i * 2) * 90 + i * 30, 36 + i * 10 + Math.sin(t * 1.3 + i) * 5, t, i);
+    crowd(t, 178, 6, 5, false);
+    if (mode === 'ofiara') {
+        human(130, 192, 2, Object.assign({ baby: true }, P_MARIA), t, false); human(164, 192, 2, P_JOZEF, t, false);
+        R(196, 176, 20, 14, '#5a4a30'); for (let x = 198; x < 216; x += 4) R(x, 176, 1, 14, '#2a1a0a'); dove(200, 180, t * 0.2, 1); dove(207, 182, t * 0.2, 4);
+    }
+    if (mode === 'gate') human(148, 192, 2, P_LEWITA, t, false);
+}
+function sceneTempleInside(t, who) {
+    R(0, 0, W, H, '#241608');
+    for (let y = 0; y < 150; y += 12) for (let x = ((y / 12) % 2) * 12 - 12; x < W; x += 24) R(x, y, 23, 11, '#33220e');
+    for (let j = 0; j < 6; j++) for (let i = 0; i < 16; i++) R(i * 20, 150 + j * 10, 20, 10, (i + j) % 2 ? '#4a3418' : '#3a2810');
+    [24, 100, 220, 290].forEach(x => { R(x, 0, 14, 150, '#b8902c'); R(x + 2, 0, 3, 150, '#e8c860'); R(x - 3, 0, 20, 6, '#d8b040'); R(x - 3, 144, 20, 6, '#d8b040'); });
+    for (let y = 0; y < 150; y += 2) { const o = Math.round(y * 0.55); ctx.fillStyle = 'rgba(255,235,160,0.07)'; ctx.fillRect(140 + o, y, 34, 2); }
+    R(140, 8, 34, 40, '#f8e8a0'); R(156, 8, 3, 40, '#241608'); R(140, 26, 34, 3, '#241608');
+    menorah(64, 160, t);
+    if (who === 'symeon') {
+        glow(142, 160, 34, '255,240,170', 0.16);
+        human(130, 192, 2, Object.assign({ baby: true }, P_SYMEON), t, false); human(190, 192, 2, P_MARIA, t, false); human(222, 192, 2, P_JOZEF, t, false);
+    } else if (who === 'anna') {
+        glow(142, 160, 30, '255,240,170', 0.12);
+        human(130, 192 + Math.round(Math.sin(t * 2)), 2, Object.assign({ up: true }, P_ANNA), t, false); human(190, 192, 2, Object.assign({ baby: true }, P_MARIA), t, false); human(222, 192, 2, P_JOZEF, t, false);
+    } else {
+        glow(180, 160, 50, '255,240,170', 0.18);
+        human(100, 192, 2, Object.assign({ up: true }, P_SYMEON), t, false); human(138, 192, 2, Object.assign({ up: true }, P_ANNA), t, false);
+        human(190, 192, 2, Object.assign({ baby: true }, P_MARIA), t, false); human(224, 192, 2, P_JOZEF, t, false);
+        for (let i = 0; i < 3; i++) dove(80 + i * 70 + Math.sin(t + i) * 20, 60 + i * 8, t, i);
+    }
+}
+/* --- Droga i Nazaret --- */
+function sceneRoadDay(t) {
+    band(['#f6a888', '#f8bc98', '#fad0a8', '#bcd8f0', '#9ccaf0', '#84bce8'], 0, 130); sun(236, 120, 14, '#fff0a8');
+    hills('#9aa868', 118, 8, 0.017, t * 4); hills('#7a9050', 130, 7, 0.026, t * 9);
+    R(0, 140, W, 60, '#8a7a50');
+    for (let y = 140; y < H; y++) { const hw = 3 + Math.round((y - 140) * 1.5); R(160 - hw, y, hw * 2, 1, (y >> 2) % 2 ? '#c8b080' : '#bca874'); }
+    for (let k = 0; k < 6; k++) R(159, 140 + ((k * 10 + t * 30) % 60), 2, 2, '#e8d8a8');
+    for (let k = 0; k < 8; k++) { const yy = 142 + (k * 8 + t * 30) % 56, hw = 3 + (yy - 140) * 1.5, sz = 2 + Math.round((yy - 140) / 8); R(160 + (k % 2 ? 1 : -1) * (hw + 6 + (k % 3) * 8), yy, sz, sz, '#4a6a2a'); }
+    human(118, 194, 2, P_JOZEF, t, true); human(166, 194, 2, Object.assign({ baby: true }, P_MARIA), t + 1, true);
+}
+function sceneNazaret(t) {
+    band(DAY, 0, 120); sun(256, 28, 12, '#fff3b0');
+    for (let k = 0; k < 3; k++) { const x = (t * 4 + k * 120) % (W + 80) - 40; ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.fillRect(Math.round(x), 24 + k * 14, 46, 6); ctx.fillRect(Math.round(x + 8), 20 + k * 14, 26, 6); }
+    hills('#8ab060', 112, 6, 0.02, 0); hills('#6a9a48', 128, 7, 0.03, 40);
+    [[4, 36, 40], [270, 40, 46], [236, 30, 32]].forEach(b => { R(b[0], 150 - b[2], b[1], b[2], '#f0e8d0'); R(b[0], 150 - b[2], b[1], 3, '#c8b890'); R(b[0] + 6, 150 - b[2] + 10, 5, 7, '#4a3a22'); });
+    R(0, 150, W, 50, '#b8a068');
+    for (let i = 0; i < 40; i++) R((i * 47) % W, 152 + (i * 13) % 46, 5, 1, '#a89058');
+    R(24, 118, 6, 36, '#6a4a2a'); R(6, 96, 42, 10, '#6a8a4a'); R(12, 88, 30, 10, '#7a9a56'); R(8, 104, 38, 8, '#5a7a3a');
+    R(110, 108, 4, 46, '#6a4a2a'); R(228, 108, 4, 46, '#6a4a2a'); R(104, 100, 134, 9, '#8a5a2a');
+    for (let i = 0; i < 22; i++) R(106 + i * 6, 100 + (i % 2), 4, 8, '#a67a3a');
+    R(120, 148, 90, 6, '#6a4a2a'); R(124, 154, 4, 12, '#5a3a1a'); R(202, 154, 4, 12, '#5a3a1a');
+    R(214, 116, 6, 40, '#c8a060'); R(222, 120, 5, 36, '#b89050');
+    human(138, 166, 2, P_JOZEF, t, false);
+    const h = Math.round(Math.sin(t * 6) * 6);
+    R(176, 128 + h, 2, 14, '#6a4a2a'); R(173, 126 + h, 7, 4, '#8a8a8a');
+    for (let k = 0; k < 4; k++) { const p = (t * 0.9 + k * 0.25) % 1; R(176 + k * 6 + p * 10, 148 - p * 12, 2, 1, 'rgba(230,200,140,' + (1 - p) + ')'); }
+    human(66, 178, 2, Object.assign({ }, P_MARIA), t, false); R(86, 150, 6, 7, '#a0522d'); R(87, 148, 4, 2, '#8a3a1d');
+    human(246, 182 + Math.round(Math.abs(Math.sin(t * 3)) * -2), 1, { robe: '#e8e0d0', trim: '#c8b890', hair: '#4a2a10' }, t, false);
+}
+function sandstorm(t) {
+    ctx.fillStyle = 'rgba(210,170,100,0.2)'; ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 60; i++) { const x = ((i * 53 + t * 160 * (1 + (i % 3) * 0.4)) % (W + 40)) - 20, y = (i * 37) % H; ctx.fillStyle = 'rgba(240,210,150,0.5)'; ctx.fillRect(Math.round(x), y, 6 + (i % 4) * 3, 1); }
+}
+
+/* ======================= RENDER ======================= */
+function vignette() {
+    ctx.fillStyle = 'rgba(10,10,40,0.22)'; ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 6; i++) { const s = (6 - i) * 4; ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fillRect(0, 0, W, s); ctx.fillRect(0, H - s, W, s); ctx.fillRect(0, 0, s, H); ctx.fillRect(W - s, 0, s, H); }
+}
+let scene = 'start', steps = 0;
+function render() {
+    ctx.clearRect(0, 0, W, H);
+    const t = T, st = sceneT;
+    switch (scene) {
+        case 'start': sceneStart(t); break;
+        case 'gospoda': case 'gospoda_swieca': sceneInn(t); break;
+        case 'pasterze': case 'pasterze_chleb': sceneField(t, false); break;
+        case 'znak_pasterze': sceneField(t, true); break;
+        case 'miasto_sam': case 'koniec_serc': sceneLost(t); break;
+        case 'gwiazda': sceneJourney(t, { star: true, who: 'magi' }); break;
+        case 'gwiazda_sam': sceneJourney(t, { star: true, who: 'solo' }); break;
+        case 'medrcy': case 'medrcy_ostrzezenie': sceneJourney(t, { star: true, who: 'magi' }); break;
+        case 'medrcy_dar_sam': sceneJourney(t, { star: false, who: 'leaving' }); break;
+        case 'herod': case 'herod_prawda': case 'herod_gospoda': scenePalace(t, false); break;
+        case 'herod_klamstwo': scenePalace(t, true); break;
+        case 'herod_laska': case 'lochy_sen': sceneDungeon(t, scene); break;
+        case 'ucieczka_egipt': case 'pustynia_glod': sceneEgypt(t, false); break;
+        case 'egipt_koniec': sceneEgypt(t, true); break;
+        case 'rynek': case 'rynek_urzednik': sceneMarket(t); break;
+        case 'herod_uczeni': case 'herod_zwoj': scenePalace(t, false, true); break;
+        case 'pasterze_aniolowie': sceneField(t, true, true); break;
+        case 'gwiazda_trasa': sceneStarChase(t); break;
+        case 'gwiazda_zgubiona': sceneJourney(t, { star: false, who: 'solo' }); break;
+        case 'sen_medrcow': sceneDream(t, 'medrcy'); break;
+        case 'sen_jozefa': case 'smierc_heroda': sceneDream(t, 'jozef'); break;
+        case 'droga_nazaret': case 'gate_nazaret': sceneRoadDay(t); break;
+        case 'nazaret': sceneNazaret(t); break;
+        case 'swiatynia': sceneTemple(t, false); break;
+        case 'swiatynia_ofiara': sceneTemple(t, 'ofiara'); break;
+        case 'gate_swiatynia': sceneTemple(t, 'gate'); break;
+        case 'swiatynia_symeon': sceneTempleInside(t, 'symeon'); break;
+        case 'swiatynia_anna': sceneTempleInside(t, 'anna'); break;
+        case 'swiatynia_koniec': sceneTempleInside(t, 'both'); break;
+        default: sceneStable(t, st, scene);
+    }
+    if (scene === 'pustynia_glod') sandstorm(t);
+    if (LOSE.has(scene)) vignette();
+    parts.forEach(p => { ctx.fillStyle = 'rgba(' + p.c + ',' + Math.max(0, 1 - p.life / p.max) + ')'; ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2); });
+    if (trans) drawDissolve(trans.phase === 'out' ? trans.p : 1 - trans.p);
+}
+const COLS = 20, ROWS = 13, order = [];
+for (let i = 0; i < COLS * ROWS; i++) order.push(Math.random());
+function drawDissolve(p) {
+    ctx.fillStyle = '#000';
+    for (let i = 0; i < order.length; i++) if (order[i] < p) ctx.fillRect((i % COLS) * 16, Math.floor(i / COLS) * 16, 16, 16);
+}
+
+/* ======================= UI / LOGIKA ======================= */
+const $ = id => document.getElementById(id);
+const titleEl = $('title'), hintEl = $('hint'), optionsEl = $('options'), endEl = $('endbox');
+let hintText = '', typed = 0, busy = false, trans = null, kbd = false, pendingCount = false, pendingReset = false;
+let hearts = MAXH, curOpts = [];
+const items = new Set(), flags = new Set();
+let earned = new Set();
+try { earned = new Set(JSON.parse(localStorage.getItem('leo-gabi-gra-odznaki') || '[]')); } catch (e) {}
+const ENDBADGE = { stajnia: 'end_stajnia', stajnia_z_pasterzami: 'end_pasterze', medrcy_stajnia: 'end_medrcy', swiatynia_koniec: 'swiatynia', nazaret: 'nazaret' };
+const CH2 = new Set(['swiatynia', 'swiatynia_ofiara', 'swiatynia_symeon', 'swiatynia_anna', 'gate_swiatynia', 'swiatynia_koniec']);
+const CH3 = new Set(['sen_medrcow', 'sen_jozefa', 'ucieczka_egipt', 'pustynia_glod', 'smierc_heroda', 'droga_nazaret', 'gate_nazaret', 'nazaret', 'egipt_koniec']);
+function chapterOf(id) { return CH2.has(id) ? 'ROZDZIAŁ II · ŚWIĄTYNIA W JEROZOLIMIE' : CH3.has(id) ? 'ROZDZIAŁ III · EGIPT I NAZARET' : 'ROZDZIAŁ I · BETLEJEM'; }
+
+/* ---------- dźwięk ---------- */
+let soundOn = false, actx = null;
+function beep(f, d, delay, type, vol) {
+    if (!soundOn) return;
+    try {
+        actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+        const o = actx.createOscillator(), g = actx.createGain(), t0 = actx.currentTime + (delay || 0);
+        o.type = type || 'square'; o.frequency.value = f;
+        g.gain.setValueAtTime(vol || 0.05, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+        o.connect(g); g.connect(actx.destination); o.start(t0); o.stop(t0 + d);
+    } catch (e) {}
+}
+function sfx(kind) {
+    if (kind === 'pick') { beep(660, 0.07); beep(880, 0.07, 0.07); }
+    else if (kind === 'win') [523, 659, 784, 1047].forEach((f, i) => beep(f, 0.18, i * 0.14));
+    else if (kind === 'lose') [392, 330, 262].forEach((f, i) => beep(f, 0.22, i * 0.18, 'triangle', 0.07));
+    else if (kind === 'hurt') { beep(220, 0.12, 0, 'sawtooth', 0.06); beep(165, 0.18, 0.1, 'sawtooth', 0.06); }
+    else if (kind === 'item') [784, 988, 1175].forEach((f, i) => beep(f, 0.1, i * 0.08));
+}
+$('sound').addEventListener('click', function () {
+    soundOn = !soundOn; this.textContent = (soundOn ? '🔊' : '🔇') + ' Dźwięk'; this.setAttribute('aria-pressed', soundOn);
+    if (soundOn) beep(660, 0.1);
+});
+
+/* ---------- HUD, powiadomienia, odznaki ---------- */
+function updateHUD(hit) {
+    let h = '';
+    for (let i = 0; i < MAXH; i++) h += '<span class="heart' + (i < hearts ? '' : ' lost') + (hit && i === hearts ? ' hit' : '') + '">' + (i < hearts ? '❤️' : '🖤') + '</span>';
+    $('hearts').innerHTML = h;
+    $('hearts').setAttribute('aria-label', 'Serca: ' + hearts + ' z ' + MAXH);
+    $('slots').innerHTML = Object.keys(ITEMS).map(k =>
+        '<span class="slot' + (items.has(k) ? ' have' : '') + '" title="' + ITEMS[k].name + '">' + (items.has(k) ? ITEMS[k].icon : '·') + '</span>').join('');
+}
+let toastT = 0;
+function notify(msg) {
+    const el = $('toast'); el.textContent = msg; el.classList.add('show');
+    clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 2400);
+}
+function shake() {
+    if (reduce) return;
+    const f = $('frame'); f.classList.remove('shake'); void f.offsetWidth; f.classList.add('shake');
+}
+function renderBadges() {
+    const keys = Object.keys(BADGES);
+    $('badgesBtn').textContent = '🏅 Odznaki ' + keys.filter(k => earned.has(k)).length + '/' + keys.length;
+    $('badges').innerHTML = keys.map(k =>
+        '<div class="badge' + (earned.has(k) ? ' got' : '') + '"><span class="bi">' + (earned.has(k) ? BADGES[k][0] : '🔒') + '</span><b>' + BADGES[k][1] + '</b><small>' + BADGES[k][2] + '</small></div>').join('');
+}
+$('badgesBtn').addEventListener('click', function () {
+    const el = $('badges'); el.hidden = !el.hidden; this.setAttribute('aria-expanded', String(!el.hidden));
+});
+function awardBadges(id) {
+    const got = [];
+    const add = b => { if (!earned.has(b)) { earned.add(b); got.push(b); } };
+    if (ENDBADGE[id]) add(ENDBADGE[id]);
+    if (hearts === MAXH) add('bez_strat');
+    if (items.size === Object.keys(ITEMS).length) add('pelna_sakwa');
+    if (items.has('zwoj')) add('znawca');
+    if (flags.has('egipt')) add('egipt');
+    if (flags.has('prawda')) add('prawda');
+    try { localStorage.setItem('leo-gabi-gra-odznaki', JSON.stringify(Array.from(earned))); } catch (e) {}
+    renderBadges();
+    return got;
+}
+
+/* ---------- interfejs sceny ---------- */
+function setBusy(b) {
+    optionsEl.querySelectorAll('button').forEach(x => { x.disabled = b || x.dataset.locked === '1'; });
+}
+function visibleOptions(sc) {
+    let o = sc.options.filter(x => !(x.hideIf && items.has(x.hideIf)));
+    if (sc.shuffle) o = o.slice().sort(() => Math.random() - 0.5);
+    return o;
+}
+function lockInfo(o) {
+    if (o._elim) return ' — zwój podpowiada: to nie to';
+    if (o.requires && !items.has(o.requires)) { const it = ITEMS[o.requires]; return ' — potrzebna: ' + it.icon + ' ' + it.name; }
+    if (o.requiresFlags && !o.requiresFlags.every(f => flags.has(f))) return o.lockText || ' — jeszcze nie teraz';
+    return '';
+}
+function setUI(id) {
+    const sc = game[id];
+    $('chap').textContent = chapterOf(id);
+    titleEl.textContent = sc.text;
+    hintText = '> ' + sc.hint + ' <'; typed = reduce ? 999 : 0; hintEl.textContent = reduce ? hintText : '';
+    const sayEl = $('say');
+    if (sc.say) {
+        sayEl.hidden = false; $('sayWho').textContent = sc.say.who; $('sayText').textContent = sc.say.text;
+        sayEl.classList.remove('pop'); void sayEl.offsetWidth; sayEl.classList.add('pop');
+    } else sayEl.hidden = true;
+    optionsEl.innerHTML = ''; endEl.hidden = true;
+    if (sc.mini) { optionsEl.hidden = true; mgStart(sc.mini); return; }
+    if (sc.options.length) {
+        optionsEl.hidden = false;
+        curOpts = visibleOptions(sc);
+        curOpts.forEach(o => { o._elim = false; });
+        if (sc.shuffle && items.has('zwoj')) { const w = curOpts.find(o => o.wrong); if (w) w._elim = true; }
+        curOpts.forEach(o => {
+            const b = document.createElement('button');
+            b.type = 'button'; b.className = 'opt';
+            const lk = lockInfo(o);
+            if (lk) { b.textContent = o.text + lk; b.dataset.locked = '1'; b.classList.add('locked'); b.disabled = true; }
+            else { b.textContent = o.text; b.addEventListener('click', () => choose(o, b)); }
+            optionsEl.appendChild(b);
+        });
+        setBusy(busy);
+    } else {
+        optionsEl.hidden = true;
+        const win = WIN.has(id);
+        endEl.hidden = false;
+        $('endTitle').textContent = win ? '★ ZWYCIĘSTWO! ★' : '✖ PRZEGRANA ✖';
+        $('endTitle').className = 'end-title ' + (win ? 'win' : 'lose');
+        let info = 'Kroki: ' + steps + ' · Serca: ' + hearts + '/' + MAXH + ' · Przedmioty: ' + items.size + '/' + Object.keys(ITEMS).length;
+        const contBtn = $('cont');
+        if (sc.cont) { contBtn.hidden = false; contBtn.textContent = sc.cont.text; contBtn.onclick = () => goTo(sc.cont.next, true, false); }
+        else { contBtn.hidden = true; contBtn.onclick = null; }
+        if (win) {
+            const stars = 1 + (hearts === MAXH ? 1 : 0) + (items.size >= 2 ? 1 : 0);
+            $('endStars').textContent = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
+            const fresh = awardBadges(id);
+            $('endBadges').textContent = fresh.length ? 'Nowa odznaka: ' + fresh.map(b => BADGES[b][0] + ' ' + BADGES[b][1]).join(', ') : '';
+            info += ' — brawo!';
+            for (let i = 0; i < 45; i++) spawnSpark(true);
+        } else {
+            $('endStars').textContent = ''; $('endBadges').textContent = '';
+            info += ' — spróbuj jeszcze raz, na pewno się uda!';
+        }
+        $('endInfo').textContent = info;
+        sfx(win ? 'win' : 'lose');
+    }
+}
+function applyScene(id) {
+    mgStop();
+    scene = id; sceneT = 0; parts.length = 0;
+    if (pendingReset) { steps = 0; hearts = MAXH; items.clear(); flags.clear(); }
+    else if (pendingCount) steps++;
+    let sc = game[id], hit = false;
+    if (sc.penalty) {
+        hearts = Math.max(0, hearts - sc.penalty); hit = true;
+        notify('−' + sc.penalty + ' ❤️  Tracisz serce'); sfx('hurt'); shake();
+    }
+    if (hearts <= 0 && id !== 'koniec_serc') { scene = id = 'koniec_serc'; sc = game[id]; }
+    if (sc.gives && !items.has(sc.gives)) {
+        items.add(sc.gives);
+        const it = ITEMS[sc.gives];
+        notify('Zdobyłeś: ' + it.icon + ' ' + it.name); sfx('item');
+    }
+    if (sc.flag) flags.add(sc.flag);
+    $('steps').textContent = steps;
+    updateHUD(hit);
+    setUI(id);
+}
+function goTo(id, count, reset) {
+    if (busy || !game[id]) return;
+    busy = true; pendingCount = !!count; pendingReset = !!reset;
+    setBusy(true); sfx('pick');
+    if (reduce) { applyScene(id); busy = false; setBusy(false); return; }
+    trans = { phase: 'out', p: 0, next: id };
+}
+function choose(o, b) {
+    if (busy) return;
+    if (o.wrong) {
+        hearts = Math.max(0, hearts - 1); updateHUD(true);
+        notify('Nie tak! −1 ❤️'); sfx('hurt'); shake();
+        b.classList.add('wrongpick'); b.dataset.locked = '1'; b.disabled = true;
+        if (hearts <= 0) { goTo('koniec_serc', false, false); }
+        else { hintText = '> Nie tak! Spróbuj jeszcze raz. <'; typed = 999; hintEl.textContent = hintText; }
+        return;
+    }
+    let next = o.next;
+    if (o.nextIf) next = items.has(o.nextIf.item) ? o.nextIf.yes : o.nextIf.no;
+    goTo(next, true, false);
+}
+$('restart').addEventListener('click', () => goTo('start', false, true));
+$('again').addEventListener('click', () => goTo('start', false, true));
+
+/* ---------- sterowanie minigrą ---------- */
+canvas.addEventListener('pointerdown', e => { if (mg.on) { const r = canvas.getBoundingClientRect(); mg.tx = (e.clientX - r.left) / r.width * W; } });
+canvas.addEventListener('pointermove', e => { if (mg.on) { const r = canvas.getBoundingClientRect(); mg.tx = (e.clientX - r.left) / r.width * W; } });
+document.addEventListener('keyup', e => { if ((e.key === 'ArrowLeft' && mg.key === -1) || (e.key === 'ArrowRight' && mg.key === 1)) mg.key = 0; });
+
+document.addEventListener('keydown', function (e) {
+    if (mg.on) { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); mg.key = e.key === 'ArrowLeft' ? -1 : 1; } return; }
+    if (busy) return;
+    const opts = Array.prototype.slice.call(optionsEl.querySelectorAll('.opt'));
+    if (/^[1-9]$/.test(e.key)) { const o = opts[+e.key - 1]; if (o) { e.preventDefault(); kbd = true; o.click(); } return; }
+    if (!opts.length) return;
+    const idx = opts.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); kbd = true; opts[(idx + 1) % opts.length].focus({ preventScroll: true }); }
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); kbd = true; opts[(idx <= 0 ? opts.length : idx) - 1].focus({ preventScroll: true }); }
+    else if (e.key === 'Enter' && idx === -1) { e.preventDefault(); kbd = true; opts[0].focus({ preventScroll: true }); }
+});
+
+let acc = 0;
+function update(dt) {
+    mgUpdate(dt);
+    if (typed < hintText.length) { typed += dt * 55; hintEl.textContent = hintText.slice(0, Math.floor(typed)); }
+    if (WIN.has(scene) && !trans) { acc += dt * 18; while (acc > 1 && parts.length < 90) { spawnSpark(false); acc -= 1; } acc = Math.min(acc, 1); }
+    for (let i = parts.length - 1; i >= 0; i--) { const p = parts[i]; p.life += dt; p.x += p.vx * dt; p.y += p.vy * dt; if (p.life > p.max) parts.splice(i, 1); }
+    if (trans) {
+        trans.p += dt / 0.32;
+        if (trans.p >= 1) {
+            if (trans.phase === 'out') { applyScene(trans.next); trans = { phase: 'in', p: 0 }; }
+            else { trans = null; busy = false; setBusy(false); if (kbd) { const f = optionsEl.querySelector('.opt'); if (f) f.focus({ preventScroll: true }); } }
+        }
+    }
+}
+let last = performance.now();
+function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    T += dt; sceneT += dt; update(dt); render();
+    requestAnimationFrame(loop);
+}
+trans = { phase: 'in', p: 0 }; busy = true;
+updateHUD(); renderBadges();
+setUI('start');
+requestAnimationFrame(function (n) { last = n; loop(n); });
+})();
+</script>
+</body>
+</html>
